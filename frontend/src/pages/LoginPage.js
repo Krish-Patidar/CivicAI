@@ -52,7 +52,7 @@ export default function LoginPage() {
           <div className="w-20 h-20 mx-auto bg-gradient-to-br from-primary-500 to-purple-600 rounded-2xl flex items-center justify-center text-white shadow-[0_0_40px_rgba(99,102,241,0.4)] mb-8">
             <Building2 className="w-10 h-10" />
           </div>
-          <h1 className="text-5xl font-black text-white mb-6 tracking-tight">NagarSeva</h1>
+          <h1 className="text-5xl font-black text-white mb-6 tracking-tight">CivicAI</h1>
           <p className="text-primary-200 text-xl mb-12 font-light">Smart Citizen Grievance Redressal System</p>
           
           <div className="grid grid-cols-2 gap-6 text-left">
