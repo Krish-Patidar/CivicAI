@@ -8,7 +8,7 @@ import { GlassCard } from '../components/ui/GlassCard';
 import { Button } from '../components/ui/Button';
 import Chatbot from '../components/Chatbot';
 import { useAuth } from '../context/AuthContext';
-import { PlusCircle, MapPin, Search, Camera, X, Scan, Zap, Send, FileCode2, LayoutDashboard, Trophy, Home } from 'lucide-react';
+import { PlusCircle, MapPin, Search, Camera, X, Scan, Zap, Send, FileCode2, LayoutDashboard, Trophy } from 'lucide-react';
 
 const SIDEBAR_LINKS = [
   { path: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
