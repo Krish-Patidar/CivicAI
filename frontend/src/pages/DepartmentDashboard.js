@@ -4,14 +4,31 @@ import api from '../utils/api';
 import { useAuth } from '../context/AuthContext';
 import Sidebar from '../components/shared/Sidebar';
 import StatCard from '../components/shared/StatCard';
-import ComplaintCard, { StatusBadge, PriorityBadge } from '../components/shared/ComplaintCard';
+import { StatusBadge, PriorityBadge } from '../components/shared/ComplaintCard';
 import { PageTransition } from '../components/ui/PageTransition';
 import { GlassCard } from '../components/ui/GlassCard';
 import { Button } from '../components/ui/Button';
 import { formatDateTime, getImageUrl, formatCurrency } from '../utils/helpers';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
+import {
+  Tooltip,
+  ResponsiveContainer,
+  PieChart,
+  Pie,
+  Cell
+} from 'recharts';
 import Chatbot from '../components/Chatbot';
-import { Building2, FileText, Clock, CheckCircle, IndianRupee, MapPin, Eye, Settings, Save, Pointer } from 'lucide-react';
+import {
+  Building2,
+  FileText,
+  Clock,
+  CheckCircle,
+  IndianRupee,
+  MapPin,
+  Eye,
+  Settings,
+  Save,
+  Pointer
+} from 'lucide-react';
 
 const SIDEBAR_LINKS = [
   { path: '/department', icon: Building2, label: 'Overview' },
