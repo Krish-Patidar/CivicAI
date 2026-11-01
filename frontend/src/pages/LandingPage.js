@@ -31,7 +31,7 @@ export default function LandingPage() {
                 <Building2 className="w-6 h-6" />
               </div>
               <span className="text-2xl font-black text-white tracking-tight">
-                NagarSeva
+                CivicAI
               </span>
             </div>
             <div className="hidden md:flex items-center space-x-8">
@@ -103,7 +103,7 @@ export default function LandingPage() {
       <div id="features" className="py-24 relative">
         <div className="max-w-7xl mx-auto px-6 lg:px-8">
           <div className="text-center max-w-3xl mx-auto mb-16">
-            <h2 className="text-4xl font-black text-white mb-4">Why use NagarSeva?</h2>
+            <h2 className="text-4xl font-black text-white mb-4">Why use CivicAI?</h2>
             <p className="text-lg text-gray-400">Experience a transparent, accountable, and next-generation grievance redressal system.</p>
           </div>
 
@@ -158,7 +158,7 @@ export default function LandingPage() {
               <div className="flex-1 text-center lg:text-left">
                 <h3 className="text-sm font-bold tracking-widest uppercase text-primary-400 mb-6">A Message from the Leadership</h3>
                 <p className="text-2xl md:text-3xl lg:text-4xl font-light leading-relaxed mb-8 italic text-gray-200">
-                  "Our goal is to create a transparent, accountable, and responsive administration. NagarSeva empowers every citizen to directly participate in the development of our state. Together, we can digitally resolve every grievance and build a better tomorrow."
+                  "Our goal is to create a transparent, accountable, and responsive administration. CivicAI empowers every citizen to directly participate in the development of our state. Together, we can digitally resolve every grievance and build a better tomorrow."
                 </p>
                 <div>
                   <h4 className="text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-white to-gray-400">Dr. Mohan Yadav</h4>
@@ -215,7 +215,7 @@ export default function LandingPage() {
             <div className="w-8 h-8 bg-gradient-to-br from-primary-600 to-purple-600 rounded-lg flex items-center justify-center text-white shadow-lg">
               <Building2 className="w-4 h-4" />
             </div>
-            <span className="text-xl font-bold text-white">NagarSeva</span>
+            <span className="text-xl font-bold text-white">CivicAI</span>
           </div>
           <p className="text-gray-500 text-sm font-medium">© {new Date().getFullYear()} Smart Grievance Redressal System. All rights reserved.</p>
           <div className="flex gap-6 text-sm font-semibold">
