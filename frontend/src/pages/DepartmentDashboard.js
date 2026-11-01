@@ -4,12 +4,12 @@ import api from '../utils/api';
 import { useAuth } from '../context/AuthContext';
 import Sidebar from '../components/shared/Sidebar';
 import StatCard from '../components/shared/StatCard';
-import { StatusBadge, PriorityBadge } from '../components/shared/ComplaintCard';
+import ComplaintCard, { StatusBadge, PriorityBadge } from '../components/shared/ComplaintCard';
 import { PageTransition } from '../components/ui/PageTransition';
 import { GlassCard } from '../components/ui/GlassCard';
 import { Button } from '../components/ui/Button';
 import { formatDateTime, getImageUrl, formatCurrency } from '../utils/helpers';
-import { Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 import Chatbot from '../components/Chatbot';
 import { Building2, FileText, Clock, CheckCircle, IndianRupee, MapPin, Eye, Settings, Save, Pointer } from 'lucide-react';
 
@@ -31,23 +31,26 @@ export default function DepartmentDashboard() {
   const [updateForm, setUpdateForm] = useState({ status: '', assignedTo: '', expense: '', adminNotes: '' });
 
   const fetchAll = useCallback(async () => {
-    try {
-      const [cRes, aRes, wRes] = await Promise.all([
-        api.get('/complaints?limit=100'),
-        api.get(`/departments/${user.departmentId}/analytics`),
-        api.get(`/departments/${user.departmentId}/workers`),
-      ]);
-      setComplaints(cRes.data.complaints);
-      setAnalytics(aRes.data.analytics);
-      setWorkers(wRes.data.workers);
-    } catch (err) {
-      toast.error('Failed to load data');
-    } finally { setLoading(false); }
-  }, [user.departmentId]);
+  try {
+    const [cRes, aRes, wRes] = await Promise.all([
+      api.get('/complaints?limit=100'),
+      api.get(`/departments/${user.departmentId}/analytics`),
+      api.get(`/departments/${user.departmentId}/workers`),
+    ]);
 
-    useEffect(() => {
-    fetchAll(); 
-  }, [fetchAll]);
+    setComplaints(cRes.data.complaints);
+    setAnalytics(aRes.data.analytics);
+    setWorkers(wRes.data.workers);
+  } catch (err) {
+    toast.error('Failed to load data');
+  } finally {
+    setLoading(false);
+  }
+}, [user.departmentId]);
+
+useEffect(() => {
+  fetchAll();
+}, [fetchAll]);
 
   const selectComplaint = (c) => {
     setSelected(c);
