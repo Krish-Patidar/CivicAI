@@ -48,11 +48,6 @@ export default function AdminLoginPage() {
 
           <div className="bg-amber-500/10 border border-amber-500/20 rounded-2xl p-4 mb-8 text-sm text-amber-200/90 flex gap-3">
             <Info className="w-5 h-5 flex-shrink-0 text-amber-400" />
-            <div className="leading-relaxed">
-              <strong className="text-amber-400">Demo credentials:</strong><br />
-              <span className="text-white">CM Admin:</span> cm@grievance.gov.in / Admin@123<br />
-              <span className="text-white">Dept Admin:</span> admin.road@grievance.gov.in / Admin@123
-            </div>
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-6">
