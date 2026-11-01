@@ -39,7 +39,7 @@ export default function RegisterPage() {
     try {
       const { data } = await api.post('/auth/register', { ...form, otp });
       login(data.token, data.user);
-      toast.success('Welcome to NagarSeva! 🎉');
+      toast.success('Welcome to CivicAI! 🎉');
       navigate('/dashboard');
     } catch (err) {
       toast.error(err.response?.data?.message || 'Registration failed');
@@ -59,7 +59,7 @@ export default function RegisterPage() {
           <div className="w-20 h-20 mx-auto bg-gradient-to-br from-emerald-500 to-teal-600 rounded-2xl flex items-center justify-center text-white shadow-[0_0_40px_rgba(16,185,129,0.4)] mb-8">
             <Sparkles className="w-10 h-10" />
           </div>
-          <h1 className="text-5xl font-black text-white mb-6 tracking-tight">Join NagarSeva</h1>
+          <h1 className="text-5xl font-black text-white mb-6 tracking-tight">Join CivicAI</h1>
           <p className="text-emerald-200 text-xl mb-12 font-light">Be a responsible citizen. Report issues, earn credits, win rewards.</p>
           
           <div className="space-y-4 text-left">
