@@ -8,7 +8,7 @@ import { GlassCard } from '../components/ui/GlassCard';
 import { Button } from '../components/ui/Button';
 import Chatbot from '../components/Chatbot';
 import { useAuth } from '../context/AuthContext';
-import { PlusCircle, MapPin, Search, Camera, X, Scan, Zap, Send, FileCode2, LayoutDashboard, Trophy } from 'lucide-react';
+import { PlusCircle, MapPin, Search, Camera, X, Scan, Zap, Send, FileCode2, LayoutDashboard, Trophy, Home } from 'lucide-react';
 
 const SIDEBAR_LINKS = [
   { path: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
@@ -94,7 +94,7 @@ export default function SubmitComplaint() {
               <Zap className="w-12 h-12 text-white" />
             </div>
             <h2 className="text-3xl font-black text-white mb-2 tracking-tight">Transmission Successful</h2>
-            <p className="text-gray-400 mb-8 font-medium">NagarSeva AI has classified and routed your issue.</p>
+            <p className="text-gray-400 mb-8 font-medium">CivicAI has classified and routed your issue.</p>
             
             <div className="grid grid-cols-2 gap-4 mb-8 text-left">
               <div className="bg-white/5 border border-white/10 rounded-2xl p-5">
