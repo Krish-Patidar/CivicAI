@@ -10,7 +10,7 @@ import { PageTransition } from '../components/ui/PageTransition';
 import { GlassCard } from '../components/ui/GlassCard';
 import { Button } from '../components/ui/Button';
 import Chatbot from '../components/Chatbot';
-import { Home, FileText, MapPin, Trophy, LayoutDashboard, Clock, RefreshCw, CheckCircle, PlusCircle, Inbox, Activity } from 'lucide-react';
+import { FileText, MapPin, Trophy, LayoutDashboard, Clock, RefreshCw, CheckCircle, PlusCircle, Inbox, Activity } from 'lucide-react';
 
 
 const SIDEBAR_LINKS = [
