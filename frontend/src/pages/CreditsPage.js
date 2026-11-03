@@ -8,7 +8,7 @@ import { GlassCard } from '../components/ui/GlassCard';
 import { Button } from '../components/ui/Button';
 import Chatbot from '../components/Chatbot';
 import { useAuth } from '../context/AuthContext';
-import { Trophy, LayoutDashboard, PlusCircle, MapPin, Gift, ScrollText, CheckCircle2, History, TrendingUp, Send } from 'lucide-react';
+import { Trophy, LayoutDashboard, PlusCircle, MapPin, Gift, ScrollText, CheckCircle2, History, TrendingUp } from 'lucide-react';
 
 const SIDEBAR_LINKS = [
   { path: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
@@ -23,7 +23,8 @@ export default function CreditsPage() {
   const [loading, setLoading] = useState(true);
   const [claiming, setClaiming] = useState(false);
 
-  useEffect(() => { fetchCredits(); }, []);
+  useEffect(() => { fetchCredits(); // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const fetchCredits = async () => {
     try {
