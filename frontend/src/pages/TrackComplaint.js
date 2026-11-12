@@ -3,7 +3,8 @@ import { useParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import api from '../utils/api';
 import Sidebar from '../components/shared/Sidebar';
-import { StatusBadge, PriorityBadge } from '../components/shared/ComplaintCard';
+import ComplaintCard, { StatusBadge, PriorityBadge } from '../components/shared/ComplaintCard';
+import ReviewNotice from '../components/shared/ReviewNotice';
 import { formatDateTime, CATEGORY_LABELS, getImageUrl } from '../utils/helpers';
 import { PageTransition } from '../components/ui/PageTransition';
 import { GlassCard } from '../components/ui/GlassCard';
@@ -30,7 +31,6 @@ export default function TrackComplaint() {
 
   useEffect(() => {
     fetchComplaints();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -110,7 +110,7 @@ export default function TrackComplaint() {
             </h2>
             {/* Chips scroll sideways on phones instead of wrapping into 3 rows */}
             <div className="flex gap-2 flex-nowrap overflow-x-auto lg:flex-wrap -mx-4 px-4 sm:-mx-6 sm:px-6 lg:mx-0 lg:px-0 pb-1 lg:pb-0 custom-scrollbar">
-              {['all', 'pending', 'in_progress', 'completed'].map(s => (
+              {['all', 'pending', 'in_progress', 'completed', 'rejected'].map(s => (
                 <button key={s} onClick={() => setFilter(s)}
                   className={`px-4 py-2.5 min-h-[40px] flex-shrink-0 whitespace-nowrap rounded-xl text-xs font-bold transition-all shadow-sm ${filter === s ? 'bg-primary-600 text-white shadow-primary-500/25' : 'bg-white/5 text-gray-400 hover:bg-white/10 hover:text-white'}`}>
                   {s === 'all' ? 'All Records' : s.replace('_', ' ').toUpperCase()}
@@ -132,12 +132,14 @@ export default function TrackComplaint() {
                   className={`p-4 rounded-2xl cursor-pointer transition-all border ${selected?._id === c._id ? 'bg-primary-500/10 border-primary-500/30 shadow-[0_0_20px_rgba(99,102,241,0.15)] lg:scale-[1.02]' : 'bg-white/5 border-transparent hover:border-white/10 hover:bg-white/10 active:bg-white/10'}`}>
                   <div className="flex items-start justify-between gap-3 mb-3">
                     <div className="font-bold text-sm text-white line-clamp-1 min-w-0">{c.title}</div>
-                    <StatusBadge status={c.status} />
+                    <StatusBadge status={c.status} needsReview={c.needsReview} />
                   </div>
                   <div className="flex items-center gap-2 text-xs font-medium text-gray-400">
                     <span className="font-mono text-primary-400">{c.complaintNumber}</span>
                     <span>•</span>
-                    <span className="truncate">{CATEGORY_LABELS[c.category] || c.category}</span>
+                                        <span className="truncate">
+                      {c.needsReview && c.status !== 'rejected' ? 'Under Review' : (CATEGORY_LABELS[c.category] || c.category)}
+                    </span>
                   </div>
                 </div>
               ))
@@ -169,10 +171,13 @@ export default function TrackComplaint() {
                   <p className="text-sm font-mono text-primary-400 mt-2 font-bold tracking-wider break-all">{selected.complaintNumber}</p>
                 </div>
                 <div className="flex gap-2 flex-wrap">
-                  <StatusBadge status={selected.status} />
+                  <StatusBadge status={selected.status} needsReview={selected.needsReview} />
                   <PriorityBadge priority={selected.priority} />
                 </div>
               </div>
+
+              {/* Under review / rejected message */}
+              <ReviewNotice complaint={selected} />
 
               <GlassCard className="!p-4 sm:!p-8 !bg-white/[0.02] border-primary-500/10">
                 <h3 className="text-xs font-black text-gray-500 tracking-widest uppercase mb-4 flex items-center gap-2">
@@ -184,11 +189,21 @@ export default function TrackComplaint() {
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
                 <GlassCard className="!p-4 border-t-2 border-t-primary-500 min-w-0">
                   <div className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-1">Category</div>
-                  <div className="text-sm font-bold text-white truncate">{CATEGORY_LABELS[selected.category] || selected.category}</div>
+                                    <div className="text-sm font-bold text-white truncate">
+                    {selected.needsReview && selected.status !== 'rejected'
+                      ? 'Under Review'
+                      : (CATEGORY_LABELS[selected.category] || selected.category)}
+                  </div>
                 </GlassCard>
                 <GlassCard className="!p-4 border-t-2 border-t-purple-500 min-w-0">
                   <div className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-1">Assigned Unit</div>
-                  <div className="text-sm font-bold text-white truncate">{selected.departmentId?.name || 'In Routing...'}</div>
+                  <div className="text-sm font-bold text-white truncate">
+                    {selected.needsReview
+                      ? 'Under Review'
+                      : selected.status === 'rejected'
+                        ? 'Not assigned'
+                        : (selected.departmentId?.name || 'In Routing...')}
+                  </div>
                 </GlassCard>
                 <GlassCard className="!p-4 border-t-2 border-t-emerald-500 min-w-0">
                   <div className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-1">Logged Date</div>
