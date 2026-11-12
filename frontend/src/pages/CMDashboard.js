@@ -45,10 +45,34 @@ import {
   Download,
   ShieldAlert,
   UserX,
-  AlertTriangle
+  AlertTriangle,
+  MapPin,
+  Send,
+  XCircle,
+  TrendingUp,
+  Tag,
+  Target,
+  Activity,
+  ChevronLeft,
+  ChevronRight
 } from 'lucide-react';
-const SIDEBAR_LINKS = [{ path: '/cm', icon: '🏛️', label: 'CM Monitor' }];
+
+// Change these two lines to rename the office everywhere on this page
+const OFFICE_NAME = "Mayor's Office";
+const OFFICE_SHORT = 'Mayor';
+
+const SIDEBAR_LINKS = [{ path: '/cm', icon: Building2, label: `${OFFICE_SHORT} Dashboard` }];
 const COLORS_ARR = ['#6366f1', '#f59e0b', '#10b981', '#ef4444', '#3b82f6', '#8b5cf6', '#ec4899', '#14b8a6'];
+const PAGE_SIZE = 20;
+
+// Up to 5 page numbers around the current page
+const getPageList = (current, total) => {
+  const start = Math.max(1, Math.min(current - 2, total - 4));
+  const end = Math.min(total, start + 4);
+  const pages = [];
+  for (let i = start; i <= end; i++) pages.push(i);
+  return pages;
+};
 
 export default function CMDashboard() {
   const { user } = useAuth();
@@ -60,6 +84,23 @@ export default function CMDashboard() {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('overview');
   const [downloading, setDownloading] = useState(false);
+  const [reviewList, setReviewList] = useState([]);
+  const [reviewCount, setReviewCount] = useState(0);
+  const [selectedDept, setSelectedDept] = useState({});
+  const [diverting, setDiverting] = useState(null);
+  const [rejectingId, setRejectingId] = useState(null);
+  const [rejectReason, setRejectReason] = useState('');
+  const [rejecting, setRejecting] = useState(false);
+
+  // "All Complaints" table (server-side pagination)
+  const [tableComplaints, setTableComplaints] = useState([]);
+  const [tablePage, setTablePage] = useState(1);
+  const [tablePagination, setTablePagination] = useState({ total: 0, pages: 1 });
+  const [tableLoading, setTableLoading] = useState(false);
+
+  // Build a usable image URL (backend serves /uploads)
+  const API_ORIGIN = (api.defaults.baseURL || '').replace(/\/api\/?$/, '');
+  const imageUrl = (p) => (!p ? null : /^https?:/i.test(p) ? p : `${API_ORIGIN}${p}`);
 
   console.log('✅ CMDashboard DEBUG FILE LOADED');
   console.log('📌 Current complaints state:', complaints);
@@ -68,6 +109,105 @@ export default function CMDashboard() {
   useEffect(() => {
     fetchAll();
   }, []);
+
+  const fetchTable = async (p = tablePage) => {
+    try {
+      setTableLoading(true);
+      const { data } = await api.get(`/cm/complaints?page=${p}&limit=${PAGE_SIZE}`);
+      const list = data.complaints || [];
+      setTableComplaints(list);
+      setTablePagination({
+        total: data.pagination?.total || 0,
+        pages: data.pagination?.pages || 1
+      });
+      // If the last item on the last page was just removed, step back one page
+      if (list.length === 0 && p > 1) setTablePage(p - 1);
+    } catch (err) {
+      console.error('fetchTable failed:', err?.response?.data || err.message);
+      toast.error('Failed to load complaints');
+    } finally {
+      setTableLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchTable(tablePage);
+  }, [tablePage]);
+
+  const fetchReview = async () => {
+    try {
+      const { data } = await api.get('/cm/review-complaints');
+      setReviewList(data.complaints || []);
+      setReviewCount(data.total ?? (data.complaints || []).length);
+    } catch (err) {
+      console.error('fetchReview failed:', err?.response?.data || err.message);
+    }
+  };
+
+  // Load now, then re-check every 30 seconds so new complaints show up on their own
+  useEffect(() => {
+    fetchReview();
+    const timer = setInterval(fetchReview, 30000);
+    return () => clearInterval(timer);
+  }, []);
+
+  const removeFromReview = (id) => {
+    setReviewList((list) => list.filter((x) => x._id !== id));
+    setReviewCount((n) => Math.max(0, n - 1));
+  };
+
+  const errMsg = (err, fallback) =>
+    err.response?.data?.message ||
+    (err.response?.status === 404 ? 'Route not found. Restart or redeploy the backend with the latest cm routes.' : fallback);
+
+  const isGone = (err) => err.response?.data?.message === 'Complaint not found';
+
+  const handleDivert = async (c) => {
+    const departmentId = selectedDept[c._id] || c.suggestedDepartmentId?._id;
+    if (!departmentId) return toast.error('Select a department first');
+    try {
+      setDiverting(c._id);
+      await api.put(`/cm/complaints/${c._id}/reassign`, { departmentId });
+      toast.success('Complaint routed successfully');
+      removeFromReview(c._id);
+      fetchAll();
+      fetchTable(tablePage);
+    } catch (err) {
+      if (isGone(err)) {
+        toast.error('This complaint no longer exists');
+        removeFromReview(c._id);
+        fetchReview();
+      } else {
+        toast.error(errMsg(err, 'Failed to route complaint'));
+      }
+    } finally {
+      setDiverting(null);
+    }
+  };
+
+  const handleReject = async (c) => {
+    try {
+      setRejecting(true);
+      await api.put(`/cm/complaints/${c._id}/reject`, { reason: rejectReason });
+      toast.success('Complaint rejected');
+      removeFromReview(c._id);
+      setRejectingId(null);
+      setRejectReason('');
+      fetchAll();
+      fetchTable(tablePage);
+    } catch (err) {
+      if (isGone(err)) {
+        toast.error('This complaint no longer exists');
+        removeFromReview(c._id);
+        setRejectingId(null);
+        fetchReview();
+      } else {
+        toast.error(errMsg(err, 'Failed to reject complaint'));
+      }
+    } finally {
+      setRejecting(false);
+    }
+  };
 
   const fetchAll = async () => {
     try {
@@ -117,14 +257,14 @@ export default function CMDashboard() {
 
   const handleDownloadExcel = async () => {
     try {
-      console.log('📥 Excel download clicked');
+      console.log('📥 Report download clicked');
       setDownloading(true);
 
       const response = await api.get('/cm/export-excel', {
         responseType: 'blob'
       });
 
-      console.log('✅ Excel response received:', response);
+      console.log('✅ Report response received:', response);
 
       const blob = new Blob([response.data], {
         type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
@@ -143,11 +283,11 @@ export default function CMDashboard() {
 
       window.URL.revokeObjectURL(url);
 
-      toast.success('Excel downloaded successfully');
+      toast.success('Report downloaded successfully');
     } catch (err) {
-      console.error('❌ Excel download failed:', err);
-      console.error('❌ Excel error response:', err?.response?.data);
-      toast.error('Failed to download Excel');
+      console.error('❌ Report download failed:', err);
+      console.error('❌ Report error response:', err?.response?.data);
+      toast.error('Failed to download report');
     } finally {
       setDownloading(false);
     }
@@ -162,28 +302,39 @@ export default function CMDashboard() {
     { id: 'overview', label: 'Overview', icon: BarChart3 },
     { id: 'departments', label: 'Departments', icon: Building2 },
     { id: 'complaints', label: 'All Complaints', icon: List },
+    { id: 'review', label: 'Needs Review', icon: AlertTriangle, badge: reviewCount },
     { id: 'analytics', label: 'Advanced Analytics', icon: PieChartIcon }
   ];
 
+  // Compact summary strip (replaces 7 separate stat boxes)
+  const summaryItems = [
+    { label: 'Citizens', value: stats?.totalCitizens || 0, icon: Users, color: 'text-indigo-400' },
+    { label: 'Departments', value: stats?.totalDepartments || 0, icon: Building2, color: 'text-teal-400' },
+    { label: 'Total Expense', value: formatCurrency(stats?.totalExpense), icon: IndianRupee, color: 'text-red-400' },
+    { label: 'Resolution Rate', value: `${stats?.resolutionRate || 0}%`, icon: Zap, color: 'text-emerald-400' },
+    { label: 'Fraud Complaints', value: stats?.fraudComplaints || 0, icon: ShieldAlert, color: 'text-red-400' },
+    { label: 'Suspicious Users', value: stats?.suspiciousUsers || 0, icon: UserX, color: 'text-orange-400' },
+    { label: 'Fraud Rate', value: `${stats?.fraudRate || 0}%`, icon: AlertTriangle, color: 'text-red-400' }
+  ];
+
+  const pageFrom = tablePagination.total === 0 ? 0 : (tablePage - 1) * PAGE_SIZE + 1;
+  const pageTo = Math.min(tablePage * PAGE_SIZE, tablePagination.total);
+
   return (
     <PageTransition className="flex min-h-screen bg-background selection:bg-rose-500 selection:text-white">
-      <Sidebar links={SIDEBAR_LINKS} subtitle="Executive Office" />
+      <Sidebar links={SIDEBAR_LINKS} subtitle={OFFICE_NAME} />
 
       <main className="flex-1 p-6 lg:p-8 overflow-y-auto relative">
         <div className="absolute top-0 right-0 w-[1000px] h-[800px] bg-rose-900/10 rounded-full mix-blend-screen filter blur-[150px] pointer-events-none"></div>
 
         <div className="max-w-7xl mx-auto relative z-10 w-full">
-          
-
-          
-
           <div className="mb-8 flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
             <div>
               <h1 className="text-3xl font-black text-white tracking-tight flex items-center gap-3">
-                <Landmark className="w-8 h-8 text-rose-500" /> Executive State Dashboard
+                <Landmark className="w-8 h-8 text-rose-500" /> City Governance Dashboard
               </h1>
               <p className="text-gray-400 mt-2">
-                Centralized monitoring of all state grievance operations
+                Centralized monitoring of all city grievance operations
               </p>
             </div>
 
@@ -194,7 +345,7 @@ export default function CMDashboard() {
                 className="px-4 py-2 rounded-xl text-sm font-semibold bg-green-600 text-white hover:bg-green-700 transition disabled:opacity-60 flex items-center gap-2"
               >
                 <Download className="w-4 h-4" />
-                {downloading ? 'Downloading...' : 'Download Excel'}
+                {downloading ? 'Downloading...' : 'Download Report'}
               </button>
 
               <div className="text-xs font-mono text-gray-500 bg-white/5 border border-white/10 rounded-xl px-4 py-2 flex items-center gap-2 backdrop-blur-md shadow-sm">
@@ -219,45 +370,64 @@ export default function CMDashboard() {
                 >
                   <TabIcon className={`w-4 h-4 ${activeTab === t.id ? 'text-rose-400' : ''}`} />
                   {t.label}
+                  {t.badge > 0 && (
+                    <span className="min-w-[20px] h-5 px-1.5 rounded-full bg-rose-500 text-white text-[11px] font-black flex items-center justify-center shadow-[0_0_12px_rgba(244,63,94,0.5)]">
+                      {t.badge > 99 ? '99+' : t.badge}
+                    </span>
+                  )}
                 </button>
               );
             })}
           </div>
 
-          {activeTab === 'overview' && (
+                   {activeTab === 'overview' && (
             <>
               {loading ? (
-                <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-                  {[...Array(8)].map((_, i) => (
-                    <div key={i} className="skeleton h-24 rounded-2xl" />
-                  ))}
-                </div>
+                <>
+                    <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4 mb-6">
+                    {[...Array(6)].map((_, i) => (
+                      <div key={i} className="skeleton h-24 rounded-2xl" />
+                    ))}
+                  </div>
+                  <div className="skeleton h-20 rounded-2xl mb-10" />
+                </>
               ) : (
                 <>
-                  <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-  <StatCard icon={FileText} label="Total Complaints" value={stats?.totalComplaints || 0} color="blue" />
-  <StatCard icon={CheckCircle} label="Resolved" value={stats?.completedComplaints || 0} color="green" />
-  <StatCard icon={Clock} label="Pending" value={stats?.pendingComplaints || 0} color="orange" />
-  <StatCard icon={RefreshCw} label="In Progress" value={stats?.inProgressComplaints || 0} color="purple" />
-  <StatCard icon={Users} label="Total Citizens" value={stats?.totalCitizens || 0} color="indigo" />
-  <StatCard icon={Building2} label="Departments" value={stats?.totalDepartments || 0} color="teal" />
-  <StatCard icon={IndianRupee} label="Total Expense" value={formatCurrency(stats?.totalExpense)} color="red" />
-  <StatCard icon={Zap} label="Resolution Rate" value={`${stats?.resolutionRate || 0}%`} color="green" />
-  
-  <StatCard icon={ShieldAlert} label="Fraud Complaints" value={stats?.fraudComplaints || 0} color="red" />
-  <StatCard icon={UserX} label="Suspicious Users" value={stats?.suspiciousUsers || 0} color="orange" />
-  <StatCard icon={AlertTriangle} label="Fraud Rate" value={`${stats?.fraudRate || 0}%`} color="red" />
-</div>
-                  <div className="grid lg:grid-cols-2 gap-6 mb-6">
+                    <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4 mb-6">
+                    <StatCard icon={FileText} label="Total Complaints" value={stats?.totalComplaints || 0} color="blue" />
+                    <StatCard icon={CheckCircle} label="Resolved" value={stats?.completedComplaints || 0} color="green" />
+                    <StatCard icon={Clock} label="Pending" value={stats?.pendingComplaints || 0} color="orange" />
+                    <StatCard icon={RefreshCw} label="In Progress" value={stats?.inProgressComplaints || 0} color="purple" />
+                    <StatCard icon={AlertTriangle} label="Under Review" value={stats?.reviewComplaints || 0} color="indigo" />
+                    <StatCard icon={XCircle} label="Rejected" value={stats?.rejectedComplaints || 0} color="red" />
+                  </div>
+
+                  <GlassCard className="!p-4 sm:!p-5 mb-10" hover={false}>
+                    <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-4">
+                      {summaryItems.map((item) => (
+                        <div key={item.label} className="flex items-center gap-3 min-w-0">
+                          <item.icon className={`w-5 h-5 flex-shrink-0 ${item.color}`} />
+                          <div className="min-w-0">
+                            <div className="text-sm sm:text-base font-black text-white truncate">{item.value}</div>
+                            <div className="text-[10px] font-bold text-gray-500 uppercase tracking-wider truncate">
+                              {item.label}
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </GlassCard>
+
+                  <div className="grid lg:grid-cols-2 gap-x-10 gap-y-10 mb-12">
                     <div className="card">
-                      <h3 className="font-bold text-gray-800 mb-4">📈 Monthly Trends</h3>
-                      <ResponsiveContainer width="100%" height={220}>
-                        <LineChart data={trends}>
+                      <h3 className="font-bold text-white mb-6 flex items-center gap-2"><TrendingUp className="w-5 h-5" /> Monthly Trends</h3>
+                      <ResponsiveContainer width="100%" height={260}>
+                        <LineChart data={trends} margin={{ top: 10, right: 20, bottom: 10, left: 0 }}>
                           <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
                           <XAxis dataKey="name" tick={{ fontSize: 11 }} />
                           <YAxis tick={{ fontSize: 11 }} />
                           <Tooltip />
-                          <Legend />
+                          <Legend wrapperStyle={{ paddingTop: '12px' }} />
                           <Line type="monotone" dataKey="total" stroke="#6366f1" strokeWidth={2} name="Total" dot={{ r: 4 }} />
                           <Line type="monotone" dataKey="resolved" stroke="#10b981" strokeWidth={2} name="Resolved" dot={{ r: 4 }} />
                         </LineChart>
@@ -265,14 +435,14 @@ export default function CMDashboard() {
                     </div>
 
                     <div className="card">
-                      <h3 className="font-bold text-gray-800 mb-4">🏷️ By Category</h3>
-                      <ResponsiveContainer width="100%" height={220}>
-                        <PieChart>
+                      <h3 className="font-bold text-white mb-6 flex items-center gap-2"><Tag className="w-5 h-5" /> By Category</h3>
+                      <ResponsiveContainer width="100%" height={260}>
+                        <PieChart margin={{ top: 24, right: 24, bottom: 24, left: 24 }}>
                           <Pie
                             data={catDist}
                             cx="50%"
                             cy="50%"
-                            outerRadius={80}
+                            outerRadius={75}
                             dataKey="value"
                             label={({ name, percent }) => {
                               const safeName = name ? String(name) : 'Unknown';
@@ -292,9 +462,9 @@ export default function CMDashboard() {
                   </div>
 
                   <div className="card">
-                    <h3 className="font-bold text-gray-800 mb-4">🏢 Department Resolution Rates</h3>
-                    <ResponsiveContainer width="100%" height={220}>
-                      <BarChart data={deptPerf} margin={{ left: -10 }}>
+                    <h3 className="font-bold text-white mb-6 flex items-center gap-2"><Building2 className="w-5 h-5" /> Department Resolution Rates</h3>
+                    <ResponsiveContainer width="100%" height={260}>
+                      <BarChart data={deptPerf} margin={{ top: 10, right: 20, bottom: 10, left: -10 }}>
                         <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
                         <XAxis dataKey="code" tick={{ fontSize: 11 }} />
                         <YAxis tick={{ fontSize: 11 }} unit="%" />
@@ -308,9 +478,7 @@ export default function CMDashboard() {
                     </ResponsiveContainer>
                   </div>
 
-                 
-
-                  <div className="mt-6">
+                  <div className="mt-12">
                     <ComplaintMap complaints={complaints} />
                   </div>
                 </>
@@ -380,24 +548,25 @@ export default function CMDashboard() {
             </div>
           )}
 
-          {activeTab === 'complaints' && (
-            <GlassCard className="!p-0 overflow-hidden animate-fadeInUp flex flex-col h-[800px]" hover={false}>
+                    {activeTab === 'complaints' && (
+            <GlassCard className="!p-0 overflow-hidden animate-fadeInUp" hover={false}>
               <div className="p-6 border-b border-white/5 flex items-center justify-between bg-white/[0.02]">
                 <h3 className="text-xl font-bold text-white flex items-center gap-2">
-                  <List className="w-5 h-5 text-indigo-400" /> State-Wide Registry
+                  <List className="w-5 h-5 text-indigo-400" /> City-Wide Registry
                 </h3>
                 <span className="text-sm text-gray-500 font-medium bg-white/5 border border-white/10 px-3 py-1 rounded-lg">
-                  {complaints.length} Extracted
+                  {tablePagination.total} Total
                 </span>
               </div>
-              <div className="overflow-x-auto flex-1 custom-scrollbar p-2">
+
+              <div className={`overflow-auto max-h-[60vh] min-h-[320px] custom-scrollbar px-2 pb-2 transition-opacity ${tableLoading ? 'opacity-60' : 'opacity-100'}`}>
                 <table className="w-full text-sm text-left border-collapse">
-                  <thead className="bg-white/5 sticky top-0 z-10 backdrop-blur-xl">
+                  <thead className="bg-background/95 sticky top-0 z-10 backdrop-blur-xl">
                     <tr>
                       {['ID', 'Subject', 'Category', 'Status', 'Priority', 'Department', 'Citizen', 'Filing Date'].map((h) => (
                         <th
                           key={h}
-                          className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest border-b border-white/5"
+                          className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest border-b border-white/5 whitespace-nowrap"
                         >
                           {h}
                         </th>
@@ -405,7 +574,14 @@ export default function CMDashboard() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-white/5">
-                    {complaints.map((c) => (
+                    {tableComplaints.length === 0 && !tableLoading && (
+                      <tr>
+                        <td colSpan={8} className="px-6 py-16 text-center text-sm text-gray-500 font-medium">
+                          No complaints found
+                        </td>
+                      </tr>
+                    )}
+                    {tableComplaints.map((c) => (
                       <tr key={c._id} className="hover:bg-white/5 transition-colors group">
                         <td className="px-6 py-4 text-xs font-mono text-indigo-400 font-medium whitespace-nowrap">
                           {c.complaintNumber}
@@ -436,13 +612,217 @@ export default function CMDashboard() {
                   </tbody>
                 </table>
               </div>
+
+              {/* Pagination */}
+              <div className="px-4 sm:px-6 py-4 border-t border-white/5 bg-white/[0.02] flex flex-col sm:flex-row items-center justify-between gap-3">
+                <span className="text-xs text-gray-500 font-medium">
+                  Showing {pageFrom}-{pageTo} of {tablePagination.total}
+                </span>
+                <div className="flex items-center gap-1.5 flex-wrap justify-center">
+                  <button
+                    onClick={() => setTablePage((p) => Math.max(1, p - 1))}
+                    disabled={tablePage <= 1 || tableLoading}
+                    className="px-3 py-2 min-h-[40px] rounded-xl text-xs font-bold bg-white/5 text-gray-400 hover:bg-white/10 hover:text-white transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1"
+                  >
+                    <ChevronLeft className="w-4 h-4" /> Prev
+                  </button>
+
+                  {getPageList(tablePage, tablePagination.pages).map((n) => (
+                    <button
+                      key={n}
+                      onClick={() => setTablePage(n)}
+                      disabled={tableLoading}
+                      className={`min-w-[40px] px-3 py-2 min-h-[40px] rounded-xl text-xs font-bold transition-all ${
+                        n === tablePage
+                          ? 'bg-primary-600 text-white shadow-primary-500/25'
+                          : 'bg-white/5 text-gray-400 hover:bg-white/10 hover:text-white'
+                      }`}
+                    >
+                      {n}
+                    </button>
+                  ))}
+
+                  <button
+                    onClick={() => setTablePage((p) => Math.min(tablePagination.pages, p + 1))}
+                    disabled={tablePage >= tablePagination.pages || tableLoading}
+                    className="px-3 py-2 min-h-[40px] rounded-xl text-xs font-bold bg-white/5 text-gray-400 hover:bg-white/10 hover:text-white transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1"
+                  >
+                    Next <ChevronRight className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
             </GlassCard>
+          )}
+
+          {activeTab === 'review' && (
+            <div className="space-y-6 animate-fadeInUp">
+              {reviewList.length === 0 ? (
+                <GlassCard className="!p-10 text-center" hover={false}>
+                  <CheckCircle className="w-12 h-12 text-emerald-400 mx-auto mb-4" />
+                  <h3 className="text-xl font-bold text-white mb-1">All caught up</h3>
+                  <p className="text-gray-400 text-sm">
+                    No complaints need review right now. New ones will appear here automatically.
+                  </p>
+                </GlassCard>
+              ) : (
+                reviewList.map((c) => {
+                  const suggestedId = c.suggestedDepartmentId?._id || '';
+                  const chosen = selectedDept[c._id] ?? suggestedId;
+                  const isApprove = chosen && chosen === suggestedId;
+                  const img = imageUrl(c.image);
+                  const hasCoords = c.location?.lat && c.location?.lng;
+                  const isRejectOpen = rejectingId === c._id;
+
+                  return (
+                    <GlassCard key={c._id} className="!p-4 sm:!p-6" hover={false}>
+                      <div className="flex flex-wrap items-center gap-3 mb-4">
+                        <span className="text-xs font-mono text-indigo-400 font-bold">{c.complaintNumber}</span>
+                        <PriorityBadge priority={c.priority} />
+                        <span className="text-xs text-gray-500 ml-auto">{formatDateTime(c.createdAt)}</span>
+                      </div>
+
+                      <div className="flex flex-col md:flex-row gap-5">
+                        <div className="flex-1 min-w-0 space-y-4">
+                          <h3 className="text-lg sm:text-xl font-bold text-white break-words">{c.title}</h3>
+                          <p className="text-sm text-gray-300 whitespace-pre-line break-words">{c.description}</p>
+
+                          <div className="grid sm:grid-cols-2 gap-3">
+                            <div className="bg-white/5 border border-white/10 rounded-xl p-3 min-w-0">
+                              <div className="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-1">Submitted By</div>
+                              <div className="text-sm font-semibold text-white break-words">{c.citizenId?.name || '—'}</div>
+                              <div className="text-xs text-gray-400 break-all">{c.citizenId?.email || ''}</div>
+                              {c.citizenId?.phone && <div className="text-xs text-gray-400">{c.citizenId.phone}</div>}
+                            </div>
+
+                            <div className="bg-white/5 border border-white/10 rounded-xl p-3 min-w-0">
+                              <div className="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-1">Location</div>
+                              <div className="text-sm text-white break-words flex items-start gap-1.5">
+                                <MapPin className="w-4 h-4 text-rose-400 flex-shrink-0 mt-0.5" />
+                                <span>{c.location?.address || 'No address provided'}</span>
+                              </div>
+                              {hasCoords && (
+                                <a
+                                  href={`https://www.google.com/maps?q=${c.location.lat},${c.location.lng}`}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="text-xs text-primary-400 hover:underline mt-1 inline-block font-mono break-all"
+                                >
+                                  {c.location.lat}, {c.location.lng} · Open map
+                                </a>
+                              )}
+                            </div>
+                          </div>
+
+                          <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-3 text-sm text-amber-200 min-w-0">
+                            <div className="text-[10px] font-black text-amber-400 uppercase tracking-widest mb-1 flex items-center gap-1.5">
+                              <AlertTriangle className="w-3.5 h-3.5" /> Why this needs review
+                            </div>
+                            <div className="break-words">
+                              AI suggestion: <strong>{CATEGORY_LABELS[c.aiCategory] || c.aiCategory || 'None'}</strong>
+                              {' '}({Math.round((c.aiConfidence || 0) * 100)}% confidence)
+                              {c.aiReason ? ` — ${c.aiReason}` : ''}
+                            </div>
+                            {c.adminNotes && <div className="text-xs text-amber-300/80 mt-1 break-words">{c.adminNotes}</div>}
+                            <div className="text-xs text-gray-400 mt-1">
+                              Held back from all departments. Suggested department:{' '}
+                              <strong className="text-gray-200">{c.suggestedDepartmentId?.name || 'None'}</strong>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="w-full md:w-56 lg:w-64 flex-shrink-0">
+                          {img ? (
+                            <a href={img} target="_blank" rel="noreferrer" className="block">
+                              <img
+                                src={img}
+                                alt="Complaint evidence"
+                                className="w-full h-48 md:h-56 object-cover rounded-2xl border border-white/10"
+                              />
+                            </a>
+                          ) : (
+                            <div className="w-full h-32 md:h-56 rounded-2xl border border-dashed border-white/10 flex items-center justify-center text-xs text-gray-500 font-semibold">
+                              No image attached
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Decision */}
+                      <div className="mt-5 pt-5 border-t border-white/5 space-y-3">
+                        <div className="flex flex-col sm:flex-row gap-3">
+                          <select
+                            className="input-field flex-1 min-w-0"
+                            value={chosen}
+                            onChange={(e) => setSelectedDept((s) => ({ ...s, [c._id]: e.target.value }))}
+                          >
+                            <option value="" disabled className="bg-gray-900">Select department</option>
+                            {deptPerf.map((d) => (
+                              <option key={d.id} value={d.id} className="bg-gray-900">
+                                {d.name} ({d.code})
+                              </option>
+                            ))}
+                          </select>
+
+                          <button
+                            onClick={() => handleDivert(c)}
+                            disabled={diverting === c._id || !chosen}
+                            className="px-5 py-3 min-h-[48px] rounded-xl text-sm font-semibold bg-indigo-600 text-white hover:bg-indigo-700 transition disabled:opacity-60 flex items-center justify-center gap-2"
+                          >
+                            <Send className="w-4 h-4" />
+                            {diverting === c._id ? 'Routing...' : isApprove ? 'Approve & Route' : 'Divert to Department'}
+                          </button>
+
+                          <button
+                            onClick={() => { setRejectingId(isRejectOpen ? null : c._id); setRejectReason(''); }}
+                            className="px-5 py-3 min-h-[48px] rounded-xl text-sm font-semibold border border-rose-500/40 text-rose-300 hover:bg-rose-500/10 transition flex items-center justify-center gap-2"
+                          >
+                            <XCircle className="w-4 h-4" /> Reject
+                          </button>
+                        </div>
+
+                        {isRejectOpen && (
+                          <div className="bg-rose-500/10 border border-rose-500/20 rounded-xl p-4 space-y-3">
+                            <label className="block text-xs font-bold text-rose-300 uppercase tracking-wider">
+                              Reason shown to the citizen (optional)
+                            </label>
+                            <textarea
+                              className="input-field resize-none"
+                              rows={2}
+                              placeholder="e.g. The photo does not match the complaint"
+                              value={rejectReason}
+                              onChange={(e) => setRejectReason(e.target.value)}
+                              maxLength={300}
+                            />
+                            <div className="flex flex-col sm:flex-row gap-3">
+                              <button
+                                onClick={() => handleReject(c)}
+                                disabled={rejecting}
+                                className="px-5 py-3 min-h-[48px] rounded-xl text-sm font-semibold bg-rose-600 text-white hover:bg-rose-700 transition disabled:opacity-60 flex items-center justify-center gap-2"
+                              >
+                                <XCircle className="w-4 h-4" />
+                                {rejecting ? 'Rejecting...' : 'Confirm Reject'}
+                              </button>
+                              <button
+                                onClick={() => { setRejectingId(null); setRejectReason(''); }}
+                                className="px-5 py-3 min-h-[48px] rounded-xl text-sm font-semibold border border-white/10 text-gray-300 hover:bg-white/5 transition"
+                              >
+                                Cancel
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </GlassCard>
+                  );
+                })
+              )}
+            </div>
           )}
 
           {activeTab === 'analytics' && (
             <div className="grid lg:grid-cols-2 gap-8 animate-fadeInUp">
               <GlassCard className="!p-6 sm:!p-8">
-                <h3 className="text-xl font-bold text-white mb-6">🎯 Matrix Validation Radar</h3>
+                <h3 className="text-xl font-bold text-white mb-6 flex items-center gap-2"><Target className="w-6 h-6 text-indigo-400" /> Matrix Validation Radar</h3>
                 <ResponsiveContainer width="100%" height={320}>
                   <RadarChart data={radarData}>
                     <PolarGrid stroke="rgba(255,255,255,0.1)" />
@@ -462,7 +842,7 @@ export default function CMDashboard() {
               </GlassCard>
 
               <GlassCard className="!p-6 sm:!p-8">
-                <h3 className="text-xl font-bold text-white mb-6">💰 Resource Allocation Output</h3>
+                <h3 className="text-xl font-bold text-white mb-6 flex items-center gap-2"><IndianRupee className="w-6 h-6 text-indigo-400" /> Resource Allocation Output</h3>
                 <ResponsiveContainer width="100%" height={320}>
                   <BarChart data={deptPerf} layout="vertical" margin={{ left: 60, right: 20 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" horizontal={false} />
@@ -495,7 +875,7 @@ export default function CMDashboard() {
               </GlassCard>
 
               <GlassCard className="!p-6 sm:!p-8 lg:col-span-2">
-                <h3 className="text-xl font-bold text-white mb-6">📊 Historical Resolution Index Comparison</h3>
+                <h3 className="text-xl font-bold text-white mb-6 flex items-center gap-2"><Activity className="w-6 h-6 text-indigo-400" /> Historical Resolution Index Comparison</h3>
                 <ResponsiveContainer width="100%" height={280}>
                   <BarChart data={trends}>
                     <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
