@@ -29,13 +29,6 @@ const ProtectedRoute = ({ children, roles }) => {
   return children;
 };
 
-const HomeRedirect = () => {
-  const { user } = useAuth();
-  if (!user) return <Navigate to="/login" replace />;
-  const routes = { citizen: '/dashboard', department_admin: '/department', worker: '/worker', cm_admin: '/cm' };
-  return <Navigate to={routes[user.role] || '/login'} replace />;
-};
-
 function App() {
   return (
     <AuthProvider>
