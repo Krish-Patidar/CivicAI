@@ -8,7 +8,7 @@ import { GlassCard } from '../components/ui/GlassCard';
 import { Button } from '../components/ui/Button';
 import Chatbot from '../components/Chatbot';
 import { useAuth } from '../context/AuthContext';
-import { PlusCircle, MapPin, Search, Camera, X, Scan, Zap, Send, FileCode2, LayoutDashboard, Trophy } from 'lucide-react';
+import { PlusCircle, MapPin, Search, Camera, X, Scan, Zap, Send, FileCode2, LayoutDashboard, Trophy, Home, AlertTriangle } from 'lucide-react';
 
 const SIDEBAR_LINKS = [
   { path: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
@@ -71,10 +71,17 @@ export default function SubmitComplaint() {
         headers: { 'Content-Type': 'multipart/form-data' }
       });
 
-      setAiResult({ category: data.complaint.category, priority: data.complaint.priority, id: data.complaint.complaintNumber });
-      toast.success(`Complaint submitted! ID: ${data.complaint.complaintNumber}`);
+      setAiResult({ category: data.complaint.category, priority: data.complaint.priority, id: data.complaint.complaintNumber, needsReview: !!data.complaint.needsReview, fraudCheck: data.fraudCheck || null });
+toast.success(`Complaint submitted! ID: ${data.complaint.complaintNumber}`);
 
-      setTimeout(() => navigate('/track'), 3000);
+if (data.fraudCheck) {
+  toast(data.fraudCheck.label === 'fraud'
+    ? 'Your complaint was flagged as possibly fraudulent'
+    : 'Your complaint was flagged for closer review', { icon: <AlertTriangle className="w-5 h-5 text-amber-400" />, duration: 6000 });
+}
+
+setTimeout(() => navigate('/track'), data.fraudCheck ? 12000 : 3000);
+
     } catch (err) {
       toast.error(err.response?.data?.message || 'Submission failed');
     } finally {
@@ -94,13 +101,19 @@ export default function SubmitComplaint() {
               <Zap className="w-10 h-10 sm:w-12 sm:h-12 text-white" />
             </div>
             <h2 className="text-2xl sm:text-3xl font-black text-white mb-2 tracking-tight">Transmission Successful</h2>
-            <p className="text-gray-400 mb-6 sm:mb-8 font-medium text-sm sm:text-base">CivicAI has classified and routed your issue.</p>
+                        <p className="text-gray-400 mb-6 sm:mb-8 font-medium text-sm sm:text-base">
+              {aiResult.needsReview
+                ? 'Your complaint is under review before it goes to a department.'
+                : aiResult.fraudCheck
+                    ? 'Your complaint was submitted, but our automated check flagged it.'
+                    : 'CivicAI has classified and routed your issue.'}
+            </p>
 
             <div className="grid grid-cols-1 min-[400px]:grid-cols-2 gap-3 sm:gap-4 mb-6 sm:mb-8 text-left">
               <div className="bg-white/5 border border-white/10 rounded-2xl p-4 sm:p-5 min-w-0">
                 <FileCode2 className="w-6 h-6 text-primary-400 mb-3" />
                 <div className="text-xs font-bold text-gray-500 mb-1 uppercase tracking-wider">Classification</div>
-                <div className="font-bold text-white uppercase text-base sm:text-lg break-words">{aiResult.category}</div>
+                  <div className="font-bold text-white uppercase text-base sm:text-lg break-words">{aiResult.needsReview ? 'Under Review' : aiResult.category}</div>
               </div>
               <div className="bg-white/5 border border-white/10 rounded-2xl p-4 sm:p-5 min-w-0">
                 <Zap className="w-6 h-6 text-rose-400 mb-3" />
@@ -113,6 +126,30 @@ export default function SubmitComplaint() {
               <span className="text-sm font-semibold text-gray-400 flex-shrink-0">Tracking Code</span>
               <span className="text-primary-400 font-mono font-bold text-sm sm:text-base break-all text-right">{aiResult.id}</span>
             </div>
+
+                        {aiResult.needsReview && (
+              <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl p-3 text-sm text-amber-200 text-left mb-6 sm:mb-8">
+                We found something that needs a closer look. After the review, your complaint will either be forwarded to the respective department or rejected.
+              </div>
+            )}
+
+            {aiResult.fraudCheck && (
+  <div className={`rounded-xl p-3 text-sm text-left mb-6 sm:mb-8 border ${aiResult.fraudCheck.label === 'fraud' ? 'bg-rose-500/10 border-rose-500/30 text-rose-200' : 'bg-amber-500/10 border-amber-500/30 text-amber-200'}`}>
+    <div className="font-bold mb-1">
+      {aiResult.fraudCheck.label === 'fraud' ? 'Flagged as possibly fraudulent' : 'Flagged for closer review'}
+    </div>
+    <div>Reason: {aiResult.fraudCheck.reason}</div>
+    <div className="mt-1">
+      {aiResult.fraudCheck.label === 'fraud'
+        ? `${aiResult.fraudCheck.creditsDeducted} credits were deducted. `
+        : 'No credits were deducted. '}
+      The complaint was still submitted and the reviewing staff can see this flag.
+    </div>
+    <button type="button" onClick={() => navigate('/track')} className="mt-3 underline font-semibold">
+      Go to Track Complaints
+    </button>
+  </div>
+)}
 
             <div className="text-sm font-semibold text-gray-500 flex items-center justify-center gap-2">
               <div className="w-4 h-4 rounded-full border-2 border-primary-500 border-t-transparent animate-spin" />
