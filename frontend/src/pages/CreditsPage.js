@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import toast from 'react-hot-toast';
 import api from '../utils/api';
 import Sidebar from '../components/shared/Sidebar';
-import { formatDate, formatCurrency } from '../utils/helpers';
+import { formatDate } from '../utils/helpers';
 import { PageTransition } from '../components/ui/PageTransition';
 import { GlassCard } from '../components/ui/GlassCard';
 import { Button } from '../components/ui/Button';
@@ -23,7 +23,9 @@ export default function CreditsPage() {
   const [loading, setLoading] = useState(true);
   const [claiming, setClaiming] = useState(false);
 
-  useEffect(() => { fetchCredits(); // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    fetchCredits();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const fetchCredits = async () => {
@@ -39,15 +41,21 @@ export default function CreditsPage() {
     setClaiming(true);
     try {
       const res = await api.post('/users/claim-reward');
-      toast.success(res.data.message);
+      toast.success(res.data.message, { duration: 7000 });
       fetchCredits();
     } catch (err) {
       toast.error(err.response?.data?.message || 'Claim failed');
     } finally { setClaiming(false); }
   };
 
-  const rewardValue = data ? Math.floor(data.credits / 100) * 100 : 0;
-  const progressPercent = data ? (data.credits % 100) : 0;
+  // Threshold backend se aata hai (creditsPerVoucher). Change karna ho to userController.js me karo.
+  const threshold = data?.creditsPerVoucher || 50;
+  const voucherValue = data?.voucherValue || 100;
+  const minSpend = data?.voucherMinSpend || 200;
+  const vouchersReady = data ? Math.floor(data.credits / threshold) : 0;
+  const vouchersClaimed = data?.vouchersClaimed || 0;
+  const progressValue = data ? (data.credits >= threshold ? threshold : data.credits) : 0;
+  const progressPercent = (progressValue / threshold) * 100;
 
   return (
     <PageTransition className="flex min-h-screen bg-background text-white selection:bg-amber-500 selection:text-white">
@@ -93,15 +101,15 @@ export default function CreditsPage() {
                   <div className="flex flex-col gap-3 sm:gap-4 w-full md:w-auto">
                     <div className="bg-background/40 backdrop-blur-xl border border-white/10 rounded-2xl p-4 flex items-center justify-between gap-4 md:gap-8 md:w-64">
                       <div className="min-w-0">
-                        <div className="text-xl sm:text-2xl font-black text-white truncate">{formatCurrency(data?.totalRewards || 0)}</div>
-                        <div className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-1">Total Mined</div>
+                        <div className="text-xl sm:text-2xl font-black text-white truncate">{vouchersClaimed}</div>
+                        <div className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-1">Vouchers Claimed</div>
                       </div>
                       <div className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center border border-white/5 flex-shrink-0"><History className="w-5 h-5 text-gray-400" /></div>
                     </div>
                     <div className="bg-amber-500/10 backdrop-blur-xl border border-amber-500/20 rounded-2xl p-4 flex items-center justify-between gap-4 md:gap-8 md:w-64">
                       <div className="min-w-0">
-                        <div className="text-xl sm:text-2xl font-black text-amber-400 truncate">{formatCurrency(rewardValue)}</div>
-                        <div className="text-[10px] font-bold text-amber-500/70 uppercase tracking-widest mt-1">Liquid Assets</div>
+                        <div className="text-xl sm:text-2xl font-black text-amber-400 truncate">{vouchersReady}</div>
+                        <div className="text-[10px] font-bold text-amber-500/70 uppercase tracking-widest mt-1">Vouchers Unlockable</div>
                       </div>
                       <div className="w-10 h-10 rounded-full bg-amber-500/20 flex items-center justify-center border border-amber-500/30 flex-shrink-0"><Gift className="w-5 h-5 text-amber-400" /></div>
                     </div>
@@ -116,13 +124,13 @@ export default function CreditsPage() {
                     <Gift className="w-5 h-5 text-emerald-400" /> Claim Cycle
                   </h3>
                   <p className="text-sm text-gray-400 mb-6 sm:mb-8 leading-relaxed">
-                    Rewards can be withdrawn sequentially every 3 months. A minimum threshold of 100 credits is required for liquidation. Current claimable block: <strong className="text-white">{formatCurrency(rewardValue)}</strong>.
+                    You can claim one voucher per calendar month. Collect <strong className="text-white">{threshold} credits</strong> and we draw a surprise <strong className="text-white">₹{voucherValue}</strong> voucher for you (food, shopping, movie and more), valid on a minimum spend of ₹{minSpend}. It is emailed to your registered address with a unique code and its expiry date.
                   </p>
 
                   <div className="bg-white/5 border border-white/10 rounded-2xl p-4 sm:p-5 mb-6 sm:mb-8 flex-1">
                     <div className="flex justify-between items-center gap-3 text-sm font-bold mb-3">
                       <span className="text-gray-400 uppercase tracking-wider text-[10px]">Next Milestone Progress</span>
-                      <span className="text-emerald-400 flex-shrink-0">{progressPercent}/100</span>
+                      <span className="text-emerald-400 flex-shrink-0">{progressValue}/{threshold}</span>
                     </div>
                     <div className="w-full bg-background rounded-full h-3 border border-white/5 overflow-hidden shadow-inner">
                       <div className="bg-gradient-to-r from-amber-400 to-orange-500 h-full rounded-full transition-all duration-1000"
@@ -132,13 +140,18 @@ export default function CreditsPage() {
 
                   <Button
                     onClick={claimReward}
-                    disabled={claiming || data?.credits < 100}
+                    disabled={claiming || data?.credits < threshold || data?.claimedThisMonth}
                     isLoading={claiming}
-                    className={`w-full py-4 min-h-[52px] text-base sm:text-lg shadow-xl ${data?.credits >= 100 ? '!from-amber-500 !to-orange-600 hover:!from-amber-400 hover:!to-orange-500 shadow-amber-500/20' : 'opacity-50'}`}
+                    className={`w-full py-4 min-h-[52px] text-base sm:text-lg shadow-xl ${data?.credits >= threshold && !data?.claimedThisMonth ? '!from-amber-500 !to-orange-600 hover:!from-amber-400 hover:!to-orange-500 shadow-amber-500/20' : 'opacity-50'}`}
                     icon={Gift}
                   >
-                    Withdraw {formatCurrency(rewardValue)} Assets
+                    {data?.claimedThisMonth ? 'Claimed This Month' : 'Claim My Voucher'}
                   </Button>
+                  {data?.claimedThisMonth && data?.nextClaimDate && (
+                    <p className="text-xs text-gray-400 text-center mt-3 font-medium">
+                      Next voucher opens on {formatDate(data.nextClaimDate)}
+                    </p>
+                  )}
                 </GlassCard>
 
                 {/* Logistics */}
@@ -150,8 +163,8 @@ export default function CreditsPage() {
                     {[
                       { icon: PlusCircle, label: 'Report Grievance', value: 'Base Action', color: 'text-gray-400' },
                       { icon: CheckCircle2, label: 'Successful Resolution', value: '+10 Credits', color: 'text-emerald-400' },
-                      { icon: Trophy, label: 'Threshold: 100 Credits', value: '= ₹100 INR', color: 'text-amber-400' },
-                      { icon: History, label: 'Withdrawal Cooldown', value: 'Quarterly', color: 'text-blue-400' },
+                      { icon: Trophy, label: `Threshold: ${threshold} Credits`, value: `= ₹${voucherValue} Voucher`, color: 'text-amber-400' },
+                      { icon: History, label: 'Claim Limit', value: '1 / Month', color: 'text-blue-400' },
                     ].map((item, idx) => (
                       <div key={idx} className="flex items-center justify-between gap-3 bg-white/5 border border-white/5 rounded-2xl px-4 sm:px-5 py-3 sm:py-4 hover:bg-white/10 transition-colors">
                         <div className="flex items-center gap-3 sm:gap-4 min-w-0">
