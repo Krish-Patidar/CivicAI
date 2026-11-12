@@ -4,37 +4,17 @@ import api from '../utils/api';
 import { useAuth } from '../context/AuthContext';
 import Sidebar from '../components/shared/Sidebar';
 import StatCard from '../components/shared/StatCard';
-import { StatusBadge, PriorityBadge } from '../components/shared/ComplaintCard';
+import ComplaintCard, { StatusBadge, PriorityBadge } from '../components/shared/ComplaintCard';
 import { PageTransition } from '../components/ui/PageTransition';
 import { GlassCard } from '../components/ui/GlassCard';
 import { Button } from '../components/ui/Button';
 import { formatDateTime, getImageUrl, formatCurrency } from '../utils/helpers';
-import {
-  Tooltip,
-  ResponsiveContainer,
-  PieChart,
-  Pie,
-  Cell
-} from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 import Chatbot from '../components/Chatbot';
-import {
-  Building2,
-  FileText,
-  Clock,
-  CheckCircle,
-  IndianRupee,
-  MapPin,
-  Eye,
-  Settings,
-  Save,
-  Pointer
-} from 'lucide-react';
-
+import { Building2, FileText, Clock, CheckCircle, IndianRupee, MapPin, Eye, Settings, Save, Pointer, Wrench, Activity, XCircle, Loader } from 'lucide-react';
 const SIDEBAR_LINKS = [
   { path: '/department', icon: Building2, label: 'Overview' },
 ];
-
-const COLORS = ['#6366f1', '#f59e0b', '#10b981', '#ef4444'];
 
 export default function DepartmentDashboard() {
   const { user } = useAuth();
@@ -88,12 +68,15 @@ useEffect(() => {
 
   const filtered = filter === 'all' ? complaints : complaints.filter(c => c.status === filter);
 
-  const pieData = analytics ? [
-    { name: 'Pending', value: analytics.byStatus.pending || 0 },
-    { name: 'In Progress', value: analytics.byStatus.in_progress || 0 },
-    { name: 'Completed', value: analytics.byStatus.completed || 0 },
-    { name: 'Rejected', value: analytics.byStatus.rejected || 0 },
+   const pieData = analytics ? [
+    { name: 'Pending', value: analytics.byStatus?.pending || 0, color: '#6366f1' },
+    { name: 'In Progress', value: analytics.byStatus?.in_progress || 0, color: '#f59e0b' },
+    { name: 'Completed', value: analytics.byStatus?.completed || 0, color: '#10b981' },
+    { name: 'Rejected', value: analytics.byStatus?.rejected || 0, color: '#ef4444' },
   ] : [];
+  const pieTotal = pieData.reduce((sum, d) => sum + d.value, 0);
+  const slices = pieData.filter(d => d.value > 0);
+  const chartData = slices.length ? slices : [{ name: 'No data', value: 1, color: 'rgba(255,255,255,0.08)' }];
 
   return (
     <PageTransition className="flex min-h-screen bg-background selection:bg-primary-500 selection:text-white">
@@ -112,15 +95,17 @@ useEffect(() => {
           </div>
 
           {/* Stats */}
-          {loading ? (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-              {[...Array(4)].map((_, i) => <div key={i} className="skeleton h-32 rounded-3xl" />)}
+                    {loading ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
+              {[...Array(6)].map((_, i) => <div key={i} className="skeleton h-32 rounded-3xl" />)}
             </div>
           ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
               <StatCard icon={FileText} label="Total Assigned" value={analytics?.total || 0} color="indigo" />
               <StatCard icon={Clock} label="Pending Action" value={analytics?.byStatus?.pending || 0} color="orange" />
+              <StatCard icon={Loader} label="In Progress" value={analytics?.byStatus?.in_progress || 0} color="indigo" />
               <StatCard icon={CheckCircle} label="Successfully Resolved" value={analytics?.byStatus?.completed || 0} color="green" />
+              <StatCard icon={XCircle} label="Rejected" value={analytics?.byStatus?.rejected || 0} color="orange" />
               <StatCard icon={IndianRupee} label="Total Expenditure" value={formatCurrency(analytics?.totalExpense)} color="purple" />
             </div>
           )}
@@ -128,13 +113,13 @@ useEffect(() => {
           <div className="grid lg:grid-cols-3 gap-8">
             {/* Complaints list */}
             <div className="lg:col-span-1">
-              <GlassCard className="!p-0 h-[800px] flex flex-col overflow-hidden" hover={false}>
+              <GlassCard className="!p-0 overflow-hidden" hover={false}>
                 <div className="p-5 border-b border-white/10 bg-white/5 backdrop-blur-md">
                   <div className="font-bold text-white mb-4 text-lg flex items-center gap-2">
                     <FileText className="w-5 h-5 text-indigo-400" /> Task Queue
                   </div>
                   <div className="flex gap-2 flex-wrap">
-                    {['all', 'pending', 'in_progress', 'completed'].map(s => (
+                    {['all', 'pending', 'in_progress', 'completed', 'rejected'].map(s => (
                       <button key={s} onClick={() => setFilter(s)}
                         className={`px-3 py-1.5 rounded-full text-xs font-bold transition-all shadow-sm ${filter === s ? 'bg-indigo-500 text-white shadow-indigo-500/30' : 'bg-white/5 text-gray-400 hover:bg-white/10 hover:text-white'}`}>
                         {s.replace('_', ' ').toUpperCase()}
@@ -143,7 +128,7 @@ useEffect(() => {
                   </div>
                 </div>
 
-                <div className="overflow-y-auto flex-1 p-2 custom-scrollbar">
+                <div className="overflow-y-auto overscroll-contain p-2 custom-scrollbar max-h-[600px] min-h-[320px]">
                   {filtered.map(c => (
                     <div key={c._id} onClick={() => selectComplaint(c)}
                       className={`p-4 mb-2 rounded-2xl cursor-pointer transition-all ${selected?._id === c._id ? 'bg-indigo-500/10 border border-indigo-500/30 shadow-[0_0_20px_rgba(99,102,241,0.1)]' : 'bg-transparent border border-transparent hover:bg-white/5'}`}>
@@ -156,7 +141,11 @@ useEffect(() => {
                           <StatusBadge status={c.status} />
                           <PriorityBadge priority={c.priority} />
                         </div>
-                        {c.assignedTo && <div className="text-[10px] uppercase font-bold text-indigo-400 tracking-wider">👷 {c.assignedTo.name.split(' ')[0]}</div>}
+                        {c.assignedTo && (
+  <div className="flex items-center gap-1 text-[10px] uppercase font-bold text-indigo-400 tracking-wider">
+    <Wrench className="w-3 h-3" /> {c.assignedTo.name.split(' ')[0]}
+  </div>
+)}
                       </div>
                     </div>
                   ))}
@@ -283,21 +272,46 @@ useEffect(() => {
                 </>
               )}
 
-              {/* Analytics chart */}
+                           {/* Analytics chart */}
               {analytics && (
                 <GlassCard className="!p-6 sm:!p-8">
-                  <h3 className="text-xl font-bold text-white mb-6">📊 Efficiency Analytics</h3>
-                  <ResponsiveContainer width="100%" height={240}>
-                    <PieChart>
-                      <Pie data={pieData} cx="50%" cy="50%" innerRadius={70} outerRadius={100} dataKey="value" stroke="rgba(255,255,255,0.05)" label={({ name, value }) => `${name} (${value})`} labelLine={false}>
-                        {pieData.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
-                      </Pie>
-                      <Tooltip 
-                        contentStyle={{ backgroundColor: '#0b0f1a', borderColor: 'rgba(255,255,255,0.1)', borderRadius: '16px', color: '#fff' }}
-                        itemStyle={{ color: '#fff' }}
-                      />
-                    </PieChart>
-                  </ResponsiveContainer>
+                  <h3 className="text-xl font-bold text-white mb-6 flex items-center gap-2">
+                    <Activity className="w-6 h-6 text-indigo-400" /> Efficiency Analytics
+                  </h3>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 items-center">
+                    <div className="relative h-56">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <PieChart>
+                          <Pie data={chartData} cx="50%" cy="50%" innerRadius={62} outerRadius={90} paddingAngle={2} dataKey="value" stroke="none">
+                            {chartData.map((d, i) => <Cell key={i} fill={d.color} />)}
+                          </Pie>
+                          {slices.length > 0 && (
+                            <Tooltip
+                              contentStyle={{ backgroundColor: '#0b0f1a', borderColor: 'rgba(255,255,255,0.1)', borderRadius: '16px', color: '#fff' }}
+                              itemStyle={{ color: '#fff' }}
+                            />
+                          )}
+                        </PieChart>
+                      </ResponsiveContainer>
+                      <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                        <span className="text-3xl font-black text-white">{pieTotal}</span>
+                        <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Total</span>
+                      </div>
+                    </div>
+                    <div className="space-y-3">
+                      {pieData.map(d => (
+                        <div key={d.name} className="flex items-center justify-between gap-3 text-sm">
+                          <span className="flex items-center gap-2 text-gray-300 font-medium">
+                            <span className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: d.color }} />
+                            {d.name}
+                          </span>
+                          <span className="font-bold text-white">
+                            {d.value} <span className="text-gray-500 font-medium">({pieTotal ? Math.round((d.value / pieTotal) * 100) : 0}%)</span>
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
                 </GlassCard>
               )}
             </div>
