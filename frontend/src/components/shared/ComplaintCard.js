@@ -1,6 +1,6 @@
 import React from 'react';
 import { GlassCard } from '../ui/GlassCard';
-import { formatDate, CATEGORY_LABELS, getImageUrl, timeAgo } from '../../utils/helpers';
+import { CATEGORY_LABELS, getImageUrl, timeAgo } from '../../utils/helpers';
 import { MapPin, Clock, Building2, Tag, AlertCircle, CheckCircle, RefreshCw, XCircle, AlertTriangle } from 'lucide-react';
 import ReviewNotice from './ReviewNotice';
 
