@@ -3,7 +3,7 @@ import { useParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import api from '../utils/api';
 import Sidebar from '../components/shared/Sidebar';
-import ComplaintCard, { StatusBadge, PriorityBadge } from '../components/shared/ComplaintCard';
+import { StatusBadge, PriorityBadge } from '../components/shared/ComplaintCard';
 import ReviewNotice from '../components/shared/ReviewNotice';
 import { formatDateTime, CATEGORY_LABELS, getImageUrl } from '../utils/helpers';
 import { PageTransition } from '../components/ui/PageTransition';
