@@ -24,6 +24,7 @@ export default function CitizenDashboard() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const [stats, setStats] = useState(null);
+  const [credits, setCredits] = useState(null);
   const [complaints, setComplaints] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -34,12 +35,14 @@ export default function CitizenDashboard() {
 
   const fetchData = async () => {
     try {
-      const [statsRes, complaintsRes] = await Promise.all([
+      const [statsRes, complaintsRes, creditsRes] = await Promise.all([
         api.get('/complaints/stats'),
         api.get('/complaints?limit=5'),
+        api.get('/users/credits').catch(() => null), // fresh balance (claim ke baad bhi sahi)
       ]);
       setStats(statsRes.data.stats);
       setComplaints(complaintsRes.data.complaints);
+      if (creditsRes) setCredits(creditsRes.data.credits);
     } catch (err) {
       toast.error('Failed to load dashboard');
     } finally {
@@ -59,7 +62,7 @@ export default function CitizenDashboard() {
           <div className="mb-6 sm:mb-8 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 sm:gap-6">
             <div className="min-w-0">
               <h1 className="text-2xl sm:text-3xl font-black text-white tracking-tight break-words">
-                Good {new Date().getHours() < 12 ? 'Morning' : 'Afternoon'}, {user?.name?.split(' ')[0]} 👋
+                Good {new Date().getHours() < 12 ? 'Morning' : 'Afternoon'}, {user?.name?.split(' ')[0]}
               </h1>
               <p className="text-gray-400 mt-1 text-sm sm:text-base">Here's an overview of your civic contributions</p>
             </div>
@@ -98,7 +101,7 @@ export default function CitizenDashboard() {
               </div>
               <div className="w-full sm:w-auto flex sm:block items-center justify-between gap-4 text-center sm:text-right">
                 <div className="text-4xl sm:text-5xl font-black text-transparent bg-clip-text bg-gradient-to-br from-amber-300 to-yellow-500 drop-shadow-sm sm:mb-2">
-                  {stats?.credits || user?.credits || 0}
+                  {credits ?? stats?.credits ?? user?.credits ?? 0}
                 </div>
                 <Button variant="outline" className="!py-2.5 !px-4 !text-xs min-h-[44px] !border-amber-500/50 !text-amber-400 hover:!border-amber-500 hover:!bg-amber-500/10" onClick={() => navigate('/credits')}>
                   View Ledger →
