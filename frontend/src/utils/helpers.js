@@ -1,8 +1,8 @@
 export const UPLOAD_URL = process.env.REACT_APP_UPLOAD_URL || 'http://localhost:5000';
 
 export const getImageUrl = (path) => {
-  if (!path) return null;
-  if (path.startsWith('http')) return path;
+  if (!path) return '';
+  if (/^https?:\/\//i.test(path)) return path;
   return `${UPLOAD_URL}${path}`;
 };
 
@@ -17,9 +17,9 @@ export const formatDateTime = (dateStr) => {
 };
 
 export const CATEGORY_LABELS = {
-  road: '🛣️ Road', garbage: '🗑️ Garbage', water: '💧 Water',
-  electricity: '⚡ Electricity', sanitation: '🚽 Sanitation',
-  public_safety: '🛡️ Public Safety', parks: '🌳 Parks', other: '📋 Other'
+  road: 'Road', garbage: 'Garbage', water: 'Water',
+  electricity: 'Electricity', sanitation: 'Sanitation',
+  public_safety: 'Public Safety', parks: 'Parks', other: 'Other'
 };
 
 export const CATEGORY_COLORS = {
