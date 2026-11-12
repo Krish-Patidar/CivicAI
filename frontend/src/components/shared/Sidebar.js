@@ -76,7 +76,7 @@ const Sidebar = ({ links, subtitle }) => {
             </div>
             <div className="overflow-hidden">
               <div className="text-white font-bold truncate tracking-wide">{user?.name}</div>
-              <div className="text-gray-400 text-xs truncate capitalize">{user?.role?.replace('_', ' ')}</div>
+              <div className="text-gray-400 text-xs truncate capitalize">{user?.role === 'cm_admin' ? 'Mayor' : user?.role?.replace('_', ' ')}</div>
             </div>
           </div>
         </div>
