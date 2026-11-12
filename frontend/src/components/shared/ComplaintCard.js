@@ -1,23 +1,26 @@
 import React from 'react';
 import { GlassCard } from '../ui/GlassCard';
-import { CATEGORY_LABELS, getImageUrl, timeAgo } from '../../utils/helpers';
-import { MapPin, Clock, Building2, Tag, AlertCircle, CheckCircle, RefreshCw, XCircle } from 'lucide-react';
+import { formatDate, CATEGORY_LABELS, getImageUrl, timeAgo } from '../../utils/helpers';
+import { MapPin, Clock, Building2, Tag, AlertCircle, CheckCircle, RefreshCw, XCircle, AlertTriangle } from 'lucide-react';
+import ReviewNotice from './ReviewNotice';
 
-const StatusBadge = ({ status }) => {
+const StatusBadge = ({ status, needsReview }) => {
   const config = {
     pending: { icon: AlertCircle, class: 'bg-amber-500/10 text-amber-400 border-amber-500/20' },
     in_progress: { icon: RefreshCw, class: 'bg-primary-500/10 text-primary-400 border-primary-500/20' },
     completed: { icon: CheckCircle, class: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' },
-    rejected: { icon: XCircle, class: 'bg-rose-500/10 text-rose-400 border-rose-500/20' }
+    rejected: { icon: XCircle, class: 'bg-rose-500/10 text-rose-400 border-rose-500/20' },
+    under_review: { icon: AlertTriangle, class: 'bg-orange-500/10 text-orange-300 border-orange-500/30' }
   };
-  
-  const current = config[status] || config.pending;
+
+  const key = needsReview && status !== 'rejected' ? 'under_review' : status;
+  const current = config[key] || config.pending;
   const Icon = current.icon;
 
   return (
     <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold border ${current.class}`}>
       <Icon className="w-3.5 h-3.5" />
-      {status?.replace('_', ' ')}
+      {key?.replace('_', ' ')}
     </span>
   );
 };
@@ -59,18 +62,22 @@ const ComplaintCard = ({ complaint, onClick, children }) => {
                 <p className="text-xs font-mono text-gray-500 mt-1">{complaint.complaintNumber}</p>
               </div>
               <div className="flex flex-wrap gap-2">
-                <StatusBadge status={complaint.status} />
+                <StatusBadge status={complaint.status} needsReview={complaint.needsReview} />
                 <PriorityBadge priority={complaint.priority} />
               </div>
             </div>
 
             <p className="text-sm text-gray-400 mt-3 line-clamp-2 leading-relaxed">{complaint.description}</p>
+            <p className="text-sm text-gray-400 mt-3 line-clamp-2 leading-relaxed">{complaint.description}</p>
+            <ReviewNotice complaint={complaint} compact className="mt-3" />
           </div>
 
           <div className="flex flex-wrap items-center gap-y-2 gap-x-4 mt-4 pt-4 border-t border-white/5 text-xs text-gray-500 font-medium">
-            <span className="flex items-center gap-1.5 bg-white/5 px-2.5 py-1 rounded-lg">
+                        <span className="flex items-center gap-1.5 bg-white/5 px-2.5 py-1 rounded-lg">
               <Tag className="w-3.5 h-3.5" />
-              {CATEGORY_LABELS[complaint.category] || complaint.category}
+              {complaint.needsReview && complaint.status !== 'rejected'
+                ? 'Under Review'
+                : (CATEGORY_LABELS[complaint.category] || complaint.category)}
             </span>
             {complaint.location?.address && (
               <span className="flex items-center gap-1.5 truncate max-w-[200px]" title={complaint.location.address}>
