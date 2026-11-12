@@ -26,7 +26,7 @@ export default function ReviewNotice({ complaint, compact = false, className = '
           {compact
             ? 'The Mayor’s office is checking this complaint before it goes to a department.'
             : 'We found something suspicious, so your complaint is being checked by the Mayor’s office. After the review it will either be forwarded to the respective department or rejected.'}
-        </div>
+        </div> 
       </div>
     );
   }
