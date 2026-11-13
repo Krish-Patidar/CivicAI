@@ -22,7 +22,7 @@ app.add_middleware(
 # Keyword-based NLP classification rules
 CATEGORY_KEYWORDS = {
     "road": [
-        "road", "pothole", "street", "highway", "bridge", "footpath", "pavement",
+        "road", "pothole", "highway", "bridge", "footpath", "pavement",
         "traffic", "signal", "divider", "flyover", "accident", "speed breaker", "bump"
     ],
     "garbage": [
@@ -60,6 +60,14 @@ PRIORITY_LOW = [
     "improvement", "optional", "nice to have"
 ]
 
+PHRASE_BOOST = {
+    "electricity": ["street light", "streetlight", "street lamp", "lamp post", "light pole", "power cut"],
+    "road": ["speed breaker"],
+}
+
+def _has(text: str, term: str) -> bool:
+    # word-start match: "light" matches "lights" but not "highlight"
+    return re.search(rf'\b{re.escape(term)}', text) is not None
 
 def classify_text(text: str) -> dict:
     text_lower = text.lower()
@@ -68,7 +76,8 @@ def classify_text(text: str) -> dict:
     # Score each category
     scores = {}
     for category, keywords in CATEGORY_KEYWORDS.items():
-        score = sum(1 for kw in keywords if kw in text_lower)
+        score = sum(1 for kw in keywords if _has(text_lower, kw))
+        score += 3 * sum(1 for p in PHRASE_BOOST.get(category, []) if _has(text_lower, p))
         if score > 0:
             scores[category] = score
 
