@@ -21,8 +21,8 @@ app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // Database connection
 mongoose.connect(process.env.MONGODB_URI)
-  .then(() => console.log('✅ MongoDB Atlas connected'))
-  .catch(err => console.error('❌ MongoDB connection error:', err));
+  .then(() => console.log('MongoDB Atlas connected'))
+  .catch(err => console.error('MongoDB connection error:', err));
 
 // Routes
 app.use('/api/auth', require('./routes/auth'));
@@ -32,6 +32,7 @@ app.use('/api/workers', require('./routes/workers'));
 app.use('/api/cm', require('./routes/cm'));
 app.use('/api/users', require('./routes/users'));
 app.use('/api/chatbot', require('./routes/chatbot.routes'));
+app.use('/api/alerts', require('./routes/alerts'));
 
 // Health check
 app.get('/api/health', (req, res) => {
@@ -46,7 +47,7 @@ app.use((err, req, res, next) => {
 
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
-  console.log(`🚀 Server running on port ${PORT}`);
+  console.log(`Server running on port ${PORT}`);
 });
 
 module.exports = app;
