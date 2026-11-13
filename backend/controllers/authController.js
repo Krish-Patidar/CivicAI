@@ -100,7 +100,7 @@ exports.register = async (req, res) => {
     otpRecord.isUsed = true;
     await otpRecord.save();
 
-    // ✅ FIX: NO HASH HERE (handled in User model)
+    // FIX: NO HASH HERE (handled in User model)
     const user = await User.create({
       name,
       email: email.toLowerCase(),
@@ -146,7 +146,7 @@ exports.login = async (req, res) => {
     console.log("Password:", password);
 
     if (!email || !password) {
-      console.log("❌ Missing email or password");
+      console.log("Missing email or password");
       return res.status(400).json({
         success: false,
         message: 'Email and password are required'
@@ -158,7 +158,7 @@ exports.login = async (req, res) => {
     }).select('+password');
 
     if (!user) {
-      console.log("❌ User not found");
+      console.log("User not found");
       return res.status(404).json({
         success: false,
         message: 'User not found'
@@ -172,14 +172,14 @@ exports.login = async (req, res) => {
     console.log("Match:", isMatch);
 
     if (!isMatch) {
-      console.log("❌ Password mismatch");
+      console.log("Password mismatch");
       return res.status(400).json({
         success: false,
         message: 'Invalid email or password'
       });
     }
 
-    console.log("✅ Login Success");
+    console.log("Login Success");
 
     const token = generateToken(user._id);
 
@@ -198,7 +198,7 @@ exports.login = async (req, res) => {
     });
 
   } catch (error) {
-    console.error("🔥 LOGIN ERROR:", error);
+    console.error("LOGIN ERROR:", error);
     res.status(500).json({
       success: false,
       message: 'Login failed'
