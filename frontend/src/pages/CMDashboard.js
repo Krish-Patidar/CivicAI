@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import toast from 'react-hot-toast';
 import api from '../utils/api';
 import { useAuth } from '../context/AuthContext';
@@ -110,29 +110,34 @@ export default function CMDashboard() {
     fetchAll();
   }, []);
 
-  const fetchTable = async (p = tablePage) => {
-    try {
-      setTableLoading(true);
-      const { data } = await api.get(`/cm/complaints?page=${p}&limit=${PAGE_SIZE}`);
-      const list = data.complaints || [];
-      setTableComplaints(list);
-      setTablePagination({
-        total: data.pagination?.total || 0,
-        pages: data.pagination?.pages || 1
-      });
-      // If the last item on the last page was just removed, step back one page
-      if (list.length === 0 && p > 1) setTablePage(p - 1);
-    } catch (err) {
-      console.error('fetchTable failed:', err?.response?.data || err.message);
-      toast.error('Failed to load complaints');
-    } finally {
-      setTableLoading(false);
-    }
-  };
+ const fetchTable = useCallback(async (p) => {
+  try {
+    setTableLoading(true);
 
-  useEffect(() => {
-    fetchTable(tablePage);
-  }, [tablePage]);
+    const { data } = await api.get(`/cm/complaints?page=${p}&limit=${PAGE_SIZE}`);
+    const list = data.complaints || [];
+
+    setTableComplaints(list);
+    setTablePagination({
+      total: data.pagination?.total || 0,
+      pages: data.pagination?.pages || 1
+    });
+
+    // If the last item on the last page was just removed, step back one page
+    if (list.length === 0 && p > 1) {
+      setTablePage(p - 1);
+    }
+  } catch (err) {
+    console.error('fetchTable failed:', err?.response?.data || err.message);
+    toast.error('Failed to load complaints');
+  } finally {
+    setTableLoading(false);
+  }
+}, []);
+  
+ useEffect(() => {
+  fetchTable(tablePage);
+}, [fetchTable, tablePage]);
 
   const fetchReview = async () => {
     try {
