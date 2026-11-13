@@ -93,14 +93,41 @@ const complaintSchema = new mongoose.Schema({
     type: Number,
     default: 0
   },
-  fraudReason: {
+    fraudReason: {
     type: String,
     default: ''
   },
+
+  // AI Department Routing Fields
+  aiCategory: {
+    type: String,
+    default: null
+  },
+  aiConfidence: {
+    type: Number,
+    default: 0
+  },
+  aiReason: {
+    type: String,
+    default: ''
+  },
+  routingSource: {
+    type: String,
+    enum: ['ai', 'fallback', 'admin'],
+    default: 'ai'
+  },
+  needsReview: {
+    type: Boolean,
+    default: false
+  },
+
   complaintNumber: {
     type: String,
     unique: true
-  }
+  },
+    suggestedDepartmentId: { type: mongoose.Schema.Types.ObjectId, ref: 'Department', default: null },
+  rejectionReason: { type: String, default: '' },
+  reviewedAt: { type: Date, default: null },
 }, { timestamps: true });
 
 // Auto-generate complaint number
