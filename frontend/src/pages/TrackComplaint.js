@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import api from '../utils/api';
@@ -29,35 +29,38 @@ export default function TrackComplaint() {
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState('all');
 
-  useEffect(() => {
-    fetchComplaints();
-  }, []);
+const fetchComplaints = useCallback(async () => {
+  try {
+    const { data } = await api.get('/complaints?limit=50');
+    setComplaints(data.complaints);
 
+    if (id) {
+      const found = data.complaints.find(c => c._id === id);
+
+      if (found) {
+        setSelected(found);
+      } else {
+        const res = await api.get(`/complaints/${id}`);
+        setSelected(res.data.complaint);
+      }
+    }
+  } catch (err) {
+    toast.error('Failed to load complaints');
+  } finally {
+    setLoading(false);
+  }
+}, [id]);
+
+useEffect(() => {
+  fetchComplaints();
+}, [fetchComplaints]);
+  
   useEffect(() => {
     if (id && complaints.length > 0) {
       const found = complaints.find(c => c._id === id);
       if (found) setSelected(found);
     }
   }, [id, complaints]);
-
-  const fetchComplaints = async () => {
-    try {
-      const { data } = await api.get('/complaints?limit=50');
-      setComplaints(data.complaints);
-      if (id) {
-        const found = data.complaints.find(c => c._id === id);
-        if (found) setSelected(found);
-        else {
-          const res = await api.get(`/complaints/${id}`);
-          setSelected(res.data.complaint);
-        }
-      }
-    } catch (err) {
-      toast.error('Failed to load complaints');
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const filtered = filter === 'all' ? complaints : complaints.filter(c => c.status === filter);
 
