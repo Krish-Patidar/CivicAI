@@ -3,8 +3,8 @@ const { buildVoucherEmail } = require('./voucherEmail');
 
 const createTransporter = () => {
   return nodemailer.createTransport({
-    host: process.env.EMAIL_HOST || 'smtp.gmail.com',
-    port: parseInt(process.env.EMAIL_PORT) || 587,
+    host: process.env.EMAIL_HOST || 'smtp-relay.brevo.com',
+    port: parseInt(process.env.EMAIL_PORT || '587'),
     secure: false,
     auth: {
       user: process.env.EMAIL_USER,
@@ -16,14 +16,14 @@ const createTransporter = () => {
 const sendOTPEmail = async (email, otp, name = 'User') => {
   const transporter = createTransporter();
   const mailOptions = {
-    from: `"Grievance Portal" <${process.env.EMAIL_USER}>`,
+    from: `"CivicAI" <${process.env.EMAIL_FROM}>`,
     to: email,
-    subject: 'Your OTP for Grievance Portal',
+    subject: 'Your OTP for CivicAI',
     html: `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; background: #f8f9fa; padding: 20px; border-radius: 10px;">
         <div style="background: linear-gradient(135deg, #1a237e, #0d47a1); padding: 30px; border-radius: 10px 10px 0 0; text-align: center;">
           <h1 style="color: white; margin: 0; font-size: 24px;">Grievance Portal</h1>
-          <p style="color: #90caf9; margin: 5px 0 0;">Smart Citizen Redressal System</p>
+          <p style="color: #90caf9; margin: 5px 0 0;">CivicAI - Smart Citizen Redressal System</p>
         </div>
         <div style="background: white; padding: 30px; border-radius: 0 0 10px 10px;">
           <h2 style="color: #1a237e;">Hello, ${name}!</h2>
@@ -34,7 +34,7 @@ const sendOTPEmail = async (email, otp, name = 'User') => {
           <p style="color: #f44336; font-size: 14px;"><strong>This OTP expires in 5 minutes.</strong></p>
           <p style="color: #777; font-size: 13px;">If you didn't request this OTP, please ignore this email.</p>
           <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;">
-          <p style="color: #999; font-size: 12px; text-align: center;">2024 Smart Grievance Portal | Government of India</p>
+          <p style="color: #999; font-size: 12px; text-align: center;">2026 - CivicAI  | Smart Grievance Portal</p>
         </div>
       </div>
     `
@@ -45,7 +45,7 @@ const sendOTPEmail = async (email, otp, name = 'User') => {
 const sendComplaintSubmittedEmail = async (email, name, complaint) => {
   const transporter = createTransporter();
   const mailOptions = {
-    from: `"Grievance Portal" <${process.env.EMAIL_USER}>`,
+    from: `"CivicAI" <${process.env.EMAIL_FROM}>`,
     to: email,
     subject: `Complaint Registered - ${complaint.complaintNumber}`,
     html: `
@@ -71,7 +71,7 @@ const sendComplaintSubmittedEmail = async (email, name, complaint) => {
             <p style="color: #4caf50; font-size: 14px;">You'll receive <strong>10 credit points</strong> once this is resolved!</p>
           </div>
           <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;">
-          <p style="color: #999; font-size: 12px; text-align: center;">2024 Smart Grievance Portal</p>
+          <p style="color: #999; font-size: 12px; text-align: center;">2026 - CivicAI | Smart Grievance Portal</p>
         </div>
       </div>
     `
@@ -82,7 +82,7 @@ const sendComplaintSubmittedEmail = async (email, name, complaint) => {
 const sendComplaintCompletedEmail = async (email, name, complaint) => {
   const transporter = createTransporter();
   const mailOptions = {
-    from: `"Grievance Portal" <${process.env.EMAIL_USER}>`,
+    from: `"CivicAI" <${process.env.EMAIL_FROM}>`,
     to: email,
     subject: `Complaint Resolved - ${complaint.complaintNumber}`,
     html: `
@@ -103,7 +103,7 @@ const sendComplaintCompletedEmail = async (email, name, complaint) => {
           </div>
           <p style="color: #777; font-size: 13px;">If you're not satisfied with the resolution, you can reopen the complaint from your dashboard.</p>
           <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;">
-          <p style="color: #999; font-size: 12px; text-align: center;">2024 Smart Grievance Portal</p>
+          <p style="color: #999; font-size: 12px; text-align: center;">2026 - CivicAI | Smart Grievance Portal</p>
         </div>
       </div>
     `
@@ -116,7 +116,7 @@ const sendVoucherEmail = async (email, name, voucher) => {
   const transporter = createTransporter();
   const { subject, html, text } = buildVoucherEmail({ name, ...voucher });
   await transporter.sendMail({
-    from: `"CivicAI Rewards" <${process.env.EMAIL_USER}>`,
+    from: `"CivicAI Rewards" <${process.env.EMAIL_FROM}>`,
     to: email,
     subject,
     html,
