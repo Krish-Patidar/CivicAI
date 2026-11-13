@@ -3,22 +3,27 @@ const Department = require('../models/Department');
 const User = require('../models/User');
 const ExcelJS = require('exceljs');
 const { ChartJSNodeCanvas } = require('chartjs-node-canvas');
+
 exports.getDashboardStats = async (req, res) => {
   try {
     const [
       totalComplaints,
       pendingComplaints,
+      reviewComplaints,
       inProgressComplaints,
       completedComplaints,
+      rejectedComplaints,
       totalCitizens,
       totalDepartments,
       fraudComplaints,
       suspiciousUsersIds
     ] = await Promise.all([
       Complaint.countDocuments(),
-      Complaint.countDocuments({ status: 'pending' }),
+      Complaint.countDocuments({ status: 'pending', needsReview: { $ne: true } }),
+      Complaint.countDocuments({ needsReview: true }),
       Complaint.countDocuments({ status: 'in_progress' }),
       Complaint.countDocuments({ status: 'completed' }),
+      Complaint.countDocuments({ status: 'rejected' }),
       User.countDocuments({ role: 'citizen' }),
       Department.countDocuments({ isActive: true }),
       Complaint.countDocuments({ isFraud: true }),
@@ -39,8 +44,10 @@ exports.getDashboardStats = async (req, res) => {
       stats: {
         totalComplaints,
         pendingComplaints,
+        reviewComplaints,
         inProgressComplaints,
         completedComplaints,
+        rejectedComplaints,
         totalCitizens,
         totalDepartments,
         fraudComplaints,
@@ -120,8 +127,9 @@ exports.getMonthlyTrends = async (req, res) => {
 
 exports.getAllComplaints = async (req, res) => {
   try {
-    const { page = 1, limit = 20, status, category, departmentId } = req.query;
+    const { page = 1, limit = 20, status, category, departmentId, needsReview } = req.query;
     const filter = {};
+    if (needsReview === 'true') filter.needsReview = true;
     if (status) filter.status = status;
     if (category) filter.category = category;
     if (departmentId) filter.departmentId = departmentId;
@@ -160,7 +168,7 @@ exports.getExpenseReport = async (req, res) => {
           as: 'department'
         }
       },
-      { $unwind: { path: '$department', preserveNullAndEmpty: true } }
+      { $unwind: { path: '$department', preserveNullAndEmptyArrays: true } }
     ]);
     res.json({ success: true, report });
   } catch (error) {
@@ -182,12 +190,12 @@ exports.exportExcelReport = async (req, res) => {
       monthlyTrends
     ] = await Promise.all([
       Complaint.countDocuments(),
-      Complaint.countDocuments({ status: 'pending' }),
+            Complaint.countDocuments({ status: 'pending', needsReview: { $ne: true } }),
       Complaint.countDocuments({ status: 'in_progress' }),
       Complaint.countDocuments({ status: 'completed' }),
       User.countDocuments({ role: 'citizen' }),
       Department.countDocuments({ isActive: true }),
-      Complaint.find({})
+      Complaint.find({}).populate('suggestedDepartmentId', 'name')
         .populate('citizenId', 'name email')
         .populate('departmentId', 'name code')
         .populate('assignedTo', 'name email')
@@ -242,6 +250,9 @@ exports.exportExcelReport = async (req, res) => {
         ? Math.round((completedComplaints / totalComplaints) * 100)
         : 0;
 
+    const reviewComplaints = complaints.filter((c) => c.needsReview).length;
+    const rejectedComplaints = complaints.filter((c) => c.status === 'rejected').length;
+
     const departmentPerformance = await Promise.all(
       departments.map(async (dept) => {
         const deptComplaints = complaints.filter(
@@ -289,6 +300,8 @@ exports.exportExcelReport = async (req, res) => {
       { metric: 'Resolved Complaints', value: completedComplaints },
       { metric: 'Pending Complaints', value: pendingComplaints },
       { metric: 'In Progress Complaints', value: inProgressComplaints },
+      { metric: 'Under Review Complaints', value: reviewComplaints },
+      { metric: 'Rejected Complaints', value: rejectedComplaints },
       { metric: 'Total Citizens', value: totalCitizens },
       { metric: 'Total Departments', value: totalDepartments },
       { metric: 'Total Expense', value: totalExpense },
@@ -313,9 +326,23 @@ exports.exportExcelReport = async (req, res) => {
       { header: 'Latitude', key: 'lat', width: 12 },
       { header: 'Longitude', key: 'lng', width: 12 },
       { header: 'Expense', key: 'expense', width: 12 },
-      { header: 'Created At', key: 'createdAt', width: 22 },
       { header: 'Completed At', key: 'completedAt', width: 22 },
-      { header: 'Resolution Time (hrs)', key: 'resolutionTime', width: 20 }
+      { header: 'Resolution Time (hrs)', key: 'resolutionTime', width: 20 },
+      { header: 'Created At (ISO)', key: 'createdAtIso', width: 26 },
+      { header: 'AI Category', key: 'aiCategory', width: 16 },
+      { header: 'AI Confidence', key: 'aiConfidence', width: 14 },
+      { header: 'AI Reason', key: 'aiReason', width: 45 },
+      { header: 'Routing Source', key: 'routingSource', width: 16 },
+      { header: 'Suggested Department', key: 'suggestedDepartment', width: 24 },
+      { header: 'Needs Review', key: 'needsReview', width: 14 },
+      { header: 'Reviewed At (ISO)', key: 'reviewedAtIso', width: 26 },
+      { header: 'Rejection Reason', key: 'rejectionReason', width: 30 },
+      { header: 'Fraud Flag', key: 'isFraud', width: 12 },
+      { header: 'Fraud Score', key: 'fraudScore', width: 12 },
+      { header: 'Fraud Reason', key: 'fraudReason', width: 35 },
+      { header: 'Admin Notes', key: 'adminNotes', width: 45 },
+      { header: 'Credit Awarded', key: 'creditAwarded', width: 14 },
+      { header: 'Has Image', key: 'hasImage', width: 12 }
     ];
 
     complaints.forEach((c) => {
@@ -334,9 +361,23 @@ exports.exportExcelReport = async (req, res) => {
         lat: c.location?.lat ?? '',
         lng: c.location?.lng ?? '',
         expense: c.expense || 0,
-        createdAt: c.createdAt ? new Date(c.createdAt).toLocaleString() : '',
         completedAt: c.completedAt ? new Date(c.completedAt).toLocaleString() : '',
-        resolutionTime: c.resolutionTime ?? ''
+        resolutionTime: c.resolutionTime ?? '',
+        createdAtIso: c.createdAt ? new Date(c.createdAt).toISOString() : '',
+        aiCategory: c.aiCategory || '',
+        aiConfidence: c.aiConfidence ?? '',
+        aiReason: c.aiReason || '',
+        routingSource: c.routingSource || '',
+        suggestedDepartment: c.suggestedDepartmentId?.name || '',
+        needsReview: c.needsReview ? 'Yes' : 'No',
+        reviewedAtIso: c.reviewedAt ? new Date(c.reviewedAt).toISOString() : '',
+        rejectionReason: c.rejectionReason || '',
+        isFraud: c.isFraud ? 'Yes' : 'No',
+        fraudScore: c.fraudScore ?? '',
+        fraudReason: c.fraudReason || '',
+        adminNotes: c.adminNotes || '',
+        creditAwarded: c.creditAwarded ? 'Yes' : 'No',
+        hasImage: c.image ? 'Yes' : 'No'
       });
     });
 
@@ -531,6 +572,124 @@ exports.exportExcelReport = async (req, res) => {
     res.end();
   } catch (error) {
     console.error('Export Excel error:', error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// ===================== NEEDS REVIEW =====================
+
+exports.getReviewComplaints = async (req, res) => {
+  try {
+    const [total, complaints] = await Promise.all([
+      Complaint.countDocuments({ needsReview: true }),
+      Complaint.find({ needsReview: true })
+        .populate('citizenId', 'name email phone')
+        .populate('departmentId', 'name code')
+        .populate('suggestedDepartmentId', 'name code')
+        .sort({ createdAt: -1 })
+        .limit(100)
+    ]);
+    res.json({ success: true, total, complaints });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// Which Department counter matches a complaint status
+const STATUS_COUNTER = { pending: 'pending', in_progress: 'inProgress', completed: 'resolved' };
+
+// Take a complaint out of its department's numbers (never below zero)
+const releaseFromDepartment = async (complaint) => {
+  if (!complaint.departmentId) return;
+  const counter = STATUS_COUNTER[complaint.status];
+  const dec = { totalComplaints: -1 };
+  const filter = { _id: complaint.departmentId, totalComplaints: { $gt: 0 } };
+  if (counter) { dec[counter] = -1; filter[counter] = { $gt: 0 }; }
+  await Department.updateOne(filter, { $inc: dec });
+};
+
+// CM admin approves the suggestion or diverts to another department
+exports.reassignComplaint = async (req, res) => {
+  try {
+    const { departmentId } = req.body;
+    if (!departmentId) {
+      return res.status(400).json({ success: false, message: 'departmentId is required' });
+    }
+
+    const [complaint, newDept] = await Promise.all([
+      Complaint.findById(req.params.id),
+      Department.findOne({ _id: departmentId, isActive: true })
+    ]);
+    if (!complaint) return res.status(404).json({ success: false, message: 'Complaint not found' });
+    if (!newDept) return res.status(404).json({ success: false, message: 'Department not found' });
+    if (complaint.status === 'rejected') {
+      return res.status(400).json({ success: false, message: 'This complaint was already rejected' });
+    }
+
+    const sameDept = complaint.departmentId && String(complaint.departmentId) === String(newDept._id);
+
+    if (!sameDept) {
+      await releaseFromDepartment(complaint); // only matters for complaints that were already assigned
+      const counter = STATUS_COUNTER[complaint.status];
+      const inc = { totalComplaints: 1 };
+      if (counter) inc[counter] = 1;
+      await Department.updateOne({ _id: newDept._id }, { $inc: inc });
+
+      complaint.departmentId = newDept._id;
+      complaint.assignedTo = null;
+
+      if (newDept.categories && newDept.categories.length && !newDept.categories.includes(complaint.category)) {
+        complaint.category = newDept.categories[0];
+      }
+    }
+
+    complaint.needsReview = false;
+    complaint.routingSource = 'admin';
+    complaint.reviewedAt = new Date();
+    const note = `Approved by the Mayor's office and routed to ${newDept.name}`;
+    complaint.adminNotes = complaint.adminNotes ? `${complaint.adminNotes} | ${note}` : note;
+
+    await complaint.save();
+
+    const updated = await Complaint.findById(complaint._id)
+      .populate('citizenId', 'name email')
+      .populate('departmentId', 'name code');
+
+    res.json({ success: true, complaint: updated, message: 'Complaint routed successfully' });
+  } catch (error) {
+    console.error('Reassign complaint error:', error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// CM admin rejects a complaint after review
+exports.rejectComplaint = async (req, res) => {
+  try {
+    const reason = String(req.body.reason || '').trim().slice(0, 300) || "Rejected after review by the Mayor's office";
+
+    const complaint = await Complaint.findById(req.params.id);
+    if (!complaint) return res.status(404).json({ success: false, message: 'Complaint not found' });
+    if (complaint.status === 'completed') {
+      return res.status(400).json({ success: false, message: 'A completed complaint cannot be rejected' });
+    }
+
+    await releaseFromDepartment(complaint); // no-op when it was never assigned
+    complaint.departmentId = null;
+    complaint.assignedTo = null;
+
+    complaint.status = 'rejected';
+    complaint.needsReview = false;
+    complaint.routingSource = 'admin';
+    complaint.rejectionReason = reason;
+    complaint.reviewedAt = new Date();
+    const note = `Rejected by the Mayor's office: ${reason}`;
+    complaint.adminNotes = complaint.adminNotes ? `${complaint.adminNotes} | ${note}` : note;
+
+    await complaint.save();
+
+    res.json({ success: true, complaint, message: 'Complaint rejected' });
+  } catch (error) {
+    console.error('Reject complaint error:', error);
     res.status(500).json({ success: false, message: error.message });
   }
 };
