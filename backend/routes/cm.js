@@ -7,7 +7,10 @@ const {
   getMonthlyTrends,
   getAllComplaints,
   getExpenseReport,
-  exportExcelReport
+  exportExcelReport,
+  getReviewComplaints,
+  reassignComplaint,
+  rejectComplaint
 } = require('../controllers/cmController');
 const { protect, authorize } = require('../middleware/auth');
 
@@ -18,6 +21,9 @@ router.get('/department-performance', getDepartmentPerformance);
 router.get('/category-distribution', getCategoryDistribution);
 router.get('/monthly-trends', getMonthlyTrends);
 router.get('/complaints', getAllComplaints);
+router.get('/review-complaints', getReviewComplaints);
+router.put('/complaints/:id/reassign', reassignComplaint);
+router.put('/complaints/:id/reject', rejectComplaint);
 router.get('/expense-report', getExpenseReport);
 router.get('/export-excel', exportExcelReport);
 
