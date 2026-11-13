@@ -19,3 +19,4 @@ router.route('/:id')
   .put(upload.single('proofImage'), updateComplaint);
 
 module.exports = router;
+ 
