@@ -3,17 +3,33 @@ const Department = require('../models/Department');
 const User = require('../models/User');
 const axios = require('axios');
 const { sendComplaintSubmittedEmail, sendComplaintCompletedEmail } = require('../utils/email');
+const { routeComplaint } = require('../services/aiRouter');
+const { uploadLocalFile, removeLocalFile } = require('../utils/cloudinary');
+const { maybeRaiseAlertForComplaint } = require('../utils/alerts');
 
-// Helper to call AI service
-const classifyWithAI = async (description) => {
+const crypto = require('crypto');
+const fs = require('fs');
+
+// SHA-256 fingerprint of the uploaded photo (same file => same hash)
+const hashUpload = (file) => {
+  try {
+    const data = file.buffer || fs.readFileSync(file.path);
+    return crypto.createHash('sha256').update(data).digest('hex');
+  } catch (e) {
+    return null;
+  }
+};
+
+// Backup classifier: your Python service (used only if the Gemini router fails)
+const classifyWithAI = async (text) => {
   try {
     const response = await axios.post(`${process.env.AI_SERVICE_URL}/predict`, {
-      text: description
+      text
     }, { timeout: 5000 });
     return response.data;
   } catch (error) {
-    console.log('AI service unavailable, using fallback classification');
-    return fallbackClassify(description);
+    console.log('AI service unavailable, using keyword fallback classification');
+    return fallbackClassify(text);
   }
 };
 
@@ -35,61 +51,110 @@ const checkFraud = async (description, userId, location, imageUrl) => {
 
 const fallbackClassify = (text) => {
   const lower = text.toLowerCase();
-  const categories = {
-    road: ['road', 'pothole', 'street', 'highway', 'bridge', 'footpath', 'pavement'],
-    garbage: ['garbage', 'waste', 'trash', 'dump', 'litter', 'sewage', 'dirty'],
-    water: ['water', 'pipe', 'leakage', 'flood', 'drain', 'tap', 'supply'],
-    electricity: ['electricity', 'power', 'light', 'electric', 'wire', 'outage', 'pole'],
-    sanitation: ['toilet', 'sanitation', 'hygiene', 'clean', 'bathroom', 'latrine'],
-    public_safety: ['crime', 'safety', 'accident', 'danger', 'illegal', 'encroachment'],
-    parks: ['park', 'garden', 'tree', 'playground', 'greenery', 'bench']
+  const rules = {
+    electricity: { phrases: ['street light', 'streetlight', 'street lamp', 'lamp post', 'light pole', 'power cut', 'electric pole'],
+                   words: ['electricity', 'electric', 'power', 'wire', 'outage', 'pole', 'light', 'lamp', 'bulb', 'transformer'] },
+    road:        { phrases: ['speed breaker'], words: ['road', 'pothole', 'highway', 'bridge', 'footpath', 'pavement'] },
+    garbage:     { phrases: [], words: ['garbage', 'waste', 'trash', 'dump', 'litter', 'dirty'] },
+    water:       { phrases: ['water supply'], words: ['water', 'pipe', 'pipeline', 'leakage', 'leak', 'flood', 'drain', 'tap', 'sewage'] },
+    sanitation:  { phrases: [], words: ['toilet', 'sanitation', 'hygiene', 'bathroom', 'latrine'] },
+    public_safety: { phrases: [], words: ['crime', 'safety', 'accident', 'illegal', 'encroachment', 'theft'] },
+    parks:       { phrases: [], words: ['park', 'garden', 'tree', 'playground', 'greenery', 'bench'] }
   };
+  const has = (t) => new RegExp(`\\b${t}s?\\b`).test(lower);
 
-  for (const [category, keywords] of Object.entries(categories)) {
-    if (keywords.some(k => lower.includes(k))) {
-      const priority = lower.includes('urgent') || lower.includes('emergency') || lower.includes('danger') ? 'high'
-        : lower.includes('minor') || lower.includes('small') ? 'low' : 'medium';
-      return { category, priority };
-    }
+  let best = { category: 'other', score: 0 };
+  for (const [category, { phrases, words }] of Object.entries(rules)) {
+    let score = 0;
+    phrases.forEach(p => { if (has(p)) score += 3; });
+    words.forEach(w => { if (has(w)) score += 1; });
+    if (score > best.score) best = { category, score };
   }
-  return { category: 'other', priority: 'medium' };
+
+  const priority = /\b(urgent|asap|emergency|danger|dangerous|immediately|accident)\b/.test(lower) ? 'high'
+    : /\b(minor|small)\b/.test(lower) ? 'low' : 'medium';
+
+  return { category: best.category, priority };
 };
+
 
 // @desc Create complaint
 exports.createComplaint = async (req, res) => {
   try {
     const { title, description, lat, lng, address } = req.body;
     const image = req.file ? `/uploads/${req.file.filename}` : null;
+    const imageHash = req.file ? hashUpload(req.file) : null;
 
-    // AI Classification
-    const aiResult = await classifyWithAI(description);
+    // 1. AI routing (title + description + image), with older classifiers as backup
+    let ai;
+    try {
+      ai = await routeComplaint({ title, description, imagePath: req.file ? req.file.path : null });
+    } catch (err) {
+      console.log('LLM routing failed, using backup classifier:', err.message);
+      const old = await classifyWithAI(`${title}. ${description}`);
+      ai = {
+        category: old.category, priority: old.priority, departmentCode: null,
+        confidence: 0, imageMatchesText: true, reason: 'AI router unavailable', source: 'fallback'
+      };
+    }
+    console.log('Routing result:', { category: ai.category, dept: ai.departmentCode, confidence: ai.confidence, imageMatchesText: ai.imageMatchesText, source: ai.source });
 
-    // Fraud Detection
-    const fraudResult = await checkFraud(description, req.user._id, { lat: parseFloat(lat) || 0, lng: parseFloat(lng) || 0, address }, image);
+    // 2. Fraud detection (unchanged)
+    const fraudResult = await checkFraud(description, req.user._id, { lat: parseFloat(lat) || 0, lng: parseFloat(lng) || 0, address }, imageHash);
 
-    // Find department based on category
-    const department = await Department.findOne({
-      categories: { $in: [aiResult.category] },
-      isActive: true
-    });
+    // 3. Which department would this go to?
+    let suggested = null;
+    if (ai.departmentCode) {
+      suggested = await Department.findOne({ code: ai.departmentCode, isActive: true });
+    }
+    if (!suggested) {
+      suggested = await Department.findOne({ categories: { $in: [ai.category] }, isActive: true });
+    }
 
     const isFraudulent = fraudResult.label === 'fraud';
+    const imageMismatch = ai.imageMatchesText === false;
+    const needsReview = ai.source === 'fallback' || ai.confidence < 0.75 || imageMismatch || !suggested;
+
+    // Under review: NOT given to any department until the CM office decides
+    const department = needsReview ? null : suggested;
+
+    const notes = [];
+    if (fraudResult.label !== 'genuine') notes.push(`AI Flag (${fraudResult.label}): ${fraudResult.reason}`);
+    if (imageMismatch) notes.push('AI Flag: image may not match the complaint text');
+
+        // Move the photo to Cloudinary. The local file was already used above for AI routing and hashing.
+    let imageUrl = image;
+    if (req.file) {
+      const cloudUrl = await uploadLocalFile(req.file.path);
+      if (cloudUrl) {
+        imageUrl = cloudUrl;
+        removeLocalFile(req.file.path);
+      }
+    }
 
     const complaint = await Complaint.create({
       title,
       description,
-      image,
+      image: imageUrl,
       location: { lat: parseFloat(lat) || 0, lng: parseFloat(lng) || 0, address },
-      category: aiResult.category,
-      priority: aiResult.priority,
+      category: ai.category,
+      priority: ai.priority,
       citizenId: req.user._id,
       departmentId: department ? department._id : null,
-      aiClassified: true,
+      suggestedDepartmentId: suggested ? suggested._id : null,
+      aiClassified: ai.source === 'ai',
+      aiCategory: ai.category,
+      aiConfidence: ai.confidence,
+      aiReason: ai.reason,
+      routingSource: ai.source,
+      needsReview,
       isFraud: isFraudulent || fraudResult.label === 'suspicious',
       fraudScore: fraudResult.confidence,
       fraudReason: fraudResult.reason,
-      adminNotes: fraudResult.label !== 'genuine' ? `AI Flag (${fraudResult.label}): ${fraudResult.reason}` : ''
+      adminNotes: notes.join(' | ')
     });
+
+    await maybeRaiseAlertForComplaint({ complaint, ai, fraudResult, needsReview });
 
     // Handle Fraud Penalties
     if (isFraudulent) {
@@ -99,8 +164,8 @@ exports.createComplaint = async (req, res) => {
       });
     }
 
-    // Update department stats if genuine or we still route it for review
-    if (department && !isFraudulent) {
+    // Department stats only when it was really sent to a department
+    if (department) {
       await Department.findByIdAndUpdate(department._id, {
         $inc: { totalComplaints: 1, pending: 1 }
       });
@@ -115,7 +180,14 @@ exports.createComplaint = async (req, res) => {
 
     const populated = await Complaint.findById(complaint._id).populate('departmentId', 'name').populate('citizenId', 'name email');
 
-    res.status(201).json({ success: true, complaint: populated, message: 'Complaint submitted successfully' });
+    const fraudCheck = fraudResult.label === 'genuine' ? null : {
+  label: fraudResult.label,
+  reason: fraudResult.reason,
+  creditsDeducted: isFraudulent ? 5 : 0
+};
+
+res.status(201).json({ success: true, complaint: populated, fraudCheck, message: 'Complaint submitted successfully' });
+
   } catch (error) {
     console.error('Create complaint error:', error);
     res.status(500).json({ success: false, message: error.message });
@@ -177,7 +249,12 @@ exports.getComplaint = async (req, res) => {
 exports.updateComplaint = async (req, res) => {
   try {
     const { status, assignedTo, expense, workerNotes, adminNotes } = req.body;
-    const proofImage = req.file ? `/uploads/${req.file.filename}` : undefined;
+    let proofImage;
+    if (req.file) {
+      const cloudUrl = await uploadLocalFile(req.file.path, 'civicai/proofs');
+      proofImage = cloudUrl || `/uploads/${req.file.filename}`;
+      if (cloudUrl) removeLocalFile(req.file.path);
+    }
 
     const complaint = await Complaint.findById(req.params.id);
     if (!complaint) return res.status(404).json({ success: false, message: 'Complaint not found' });
@@ -222,11 +299,23 @@ exports.updateComplaint = async (req, res) => {
         console.log('Email send failed:', emailErr.message);
       }
     }
+    
 
     if (status === 'in_progress' && prevStatus === 'pending' && complaint.departmentId) {
       await Department.findByIdAndUpdate(complaint.departmentId, {
         $inc: { inProgress: 1, pending: -1 }
       });
+    }
+
+        // Rejected by the department: it is no longer pending / in progress
+    if (status === 'rejected' && prevStatus !== 'rejected' && complaint.departmentId) {
+      const counter = prevStatus === 'in_progress' ? 'inProgress' : prevStatus === 'pending' ? 'pending' : null;
+      if (counter) {
+        await Department.updateOne(
+          { _id: complaint.departmentId, [counter]: { $gt: 0 } },
+          { $inc: { [counter]: -1 } }
+        );
+      }
     }
 
     await complaint.save();
