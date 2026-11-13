@@ -16,3 +16,4 @@ router.get('/:id/workers', getDepartmentWorkers);
 router.get('/:id/analytics', getDepartmentAnalytics);
 
 module.exports = router;
+
